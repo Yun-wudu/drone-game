@@ -1,0 +1,2586 @@
+<title>逆風無人機</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700;800&family=Noto+Sans+TC:wght@500;700;900&display=swap">
+<style>
+:root {
+  --bg: #0d1b25;
+  --panel: #142b39;
+  --line: #25475a;
+  --ink: #eef3ee;
+  --muted: #8fb0bf;
+  --accent: #ffa23f;
+  color-scheme: dark;
+}
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans TC", system-ui, sans-serif;
+  box-sizing: border-box;
+  padding-inline: 16px;
+  padding-block: 16px;
+}
+
+.wrap { width: 100%; max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+.bar { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { margin: 0; font-size: 22px; font-weight: 900; letter-spacing: .04em; text-wrap: balance; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 12px; font-family: Oxanium, "Noto Sans TC", monospace; letter-spacing: .08em; }
+.btns { display: flex; gap: 8px; }
+
+button {
+  font: 700 13px/1 Oxanium, "Noto Sans TC", monospace;
+  color: var(--ink);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.arena { position: relative; }
+
+.stage {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line), 0 24px 50px -24px #000;
+  background: #5fa8d3;
+}
+canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; }
+
+.help { display: flex; flex-wrap: wrap; gap: 8px 20px; color: var(--muted); font-size: 13px; line-height: 1.7; }
+kbd {
+  font-family: Oxanium, monospace;
+  font-size: 12px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink);
+  background: var(--panel);
+}
+
+/* 觸控專用元件：電腦版一律隱藏 */
+.tbtns, .pad, .joy, .act { display: none; }
+
+/* ================= 手機／平板版（body.touch） ================= */
+body.touch {
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #05101a;
+}
+body.touch .bar,
+body.touch .help { display: none; }
+body.touch .wrap { max-width: none; }
+
+body.touch .arena {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 畫面維持 16:9，盡量撐滿螢幕；多出來的黑邊也可以放手指操作 */
+body.touch .stage {
+  width: min(100%, calc((100vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 16 / 9));
+  width: min(100%, calc((100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)) * 16 / 9));
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* 暫停、設定按鈕：放在右上電量面板的正下方 */
+body.touch .tbtns {
+  display: flex;
+  gap: 8px;
+  position: absolute;
+  right: 1.25%;
+  top: 21.5%;
+}
+.round {
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 18, 26, .55);
+  border: 1px solid rgba(255, 255, 255, .25);
+  color: var(--ink);
+}
+
+/* 浮動搖桿 */
+body.touch .joy:not([hidden]) {
+  display: block;
+  position: fixed;
+  left: 0;
+  top: 0;
+  border-radius: 50%;
+  background: rgba(8, 18, 26, .28);
+  border: 2px solid rgba(255, 255, 255, .45);
+  pointer-events: none;
+  will-change: transform;
+}
+.joy .knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 44%;
+  height: 44%;
+  margin: -22% 0 0 -22%;
+  border-radius: 50%;
+  background: rgba(255, 162, 63, .85);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, .5);
+  will-change: transform;
+}
+.joy.ghost { opacity: .35; }
+.joy.ghost .knob { background: rgba(255, 255, 255, .5); box-shadow: none; }
+
+/* 方向按鈕模式：半透明疊在畫面左下、右下 */
+body.touch.mode-pad .pad {
+  display: flex;
+  justify-content: space-between;
+  position: fixed;
+  left: max(16px, env(safe-area-inset-left, 0px));
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  pointer-events: none;
+}
+body.touch.mode-pad.side-right .pad { flex-direction: row-reverse; }
+.pad .grp { display: flex; gap: 10px; pointer-events: auto; }
+.pad button {
+  width: 64px;
+  height: 64px;
+  font-size: 22px;
+  border-radius: 50%;
+  touch-action: none;
+  background: rgba(8, 18, 26, .45);
+  border: 2px solid rgba(255, 255, 255, .35);
+}
+.pad button.on { background: var(--accent); color: #1a1206; border-color: var(--accent); }
+
+/* 動作鈕（噴灑／拍照）：放在搖桿的另一側；外圈是相機冷卻進度 */
+body.touch .act:not([hidden]) {
+  display: grid;
+  place-items: center;
+  position: fixed;
+  right: max(28px, calc(env(safe-area-inset-right, 0px) + 16px));
+  bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 16px));
+  width: 80px;
+  height: 80px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: conic-gradient(rgba(255, 162, 63, .95) calc(var(--p, 1) * 360deg), rgba(255, 255, 255, .18) 0);
+  touch-action: none;
+  z-index: 5;
+}
+body.touch.side-right .act:not([hidden]) {
+  right: auto;
+  left: max(28px, calc(env(safe-area-inset-left, 0px) + 16px));
+}
+body.touch.mode-pad .act:not([hidden]) { bottom: max(108px, calc(env(safe-area-inset-bottom, 0px) + 96px)); }
+.act .face {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgba(8, 18, 26, .72);
+  color: var(--ink);
+}
+.act.on .face { background: var(--accent); color: #1a1206; }
+.act .ic { display: none; }
+.act[data-kind="spray"] .ic-spray,
+.act[data-kind="photo"] .ic-photo { display: block; }
+
+/* 設定面板 */
+.sheet:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(3, 10, 16, .6);
+  touch-action: auto;
+}
+.sheet-card {
+  width: min(440px, 100%);
+  max-height: calc(100% - 8px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sheet h2 { margin: 0; font-size: 18px; font-weight: 900; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.lbl { font-size: 13px; font-weight: 700; color: var(--muted); }
+.lbl b { color: var(--accent); font-family: Oxanium, monospace; margin-left: 4px; }
+.hint { font-size: 12px; color: var(--muted); }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label {
+  flex: 1;
+  text-align: center;
+  padding: 10px 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.seg label + input + label { border-left: 1px solid var(--line); }
+.seg input:checked + label { background: var(--accent); color: #1a1206; }
+.seg input:focus-visible + label { outline: 2px solid var(--accent); outline-offset: -2px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.done { align-self: flex-end; padding: 10px 22px; font-size: 14px; background: var(--accent); color: #1a1206; border-color: var(--accent); }
+
+/* 直向提示 */
+.rotate:not([hidden]) {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  text-align: center;
+  background: #05101a;
+  color: var(--ink);
+}
+.rotate p { margin: 6px 0 0; font-size: 20px; font-weight: 900; }
+.rotate span { font-size: 14px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+    <header class="bar">
+      <div>
+        <h1>逆風無人機</h1>
+        <p class="sub">SIDE-SCROLL PROTOTYPE · v0.7</p>
+      </div>
+      <div class="btns">
+        <button id="pauseBtn" type="button">暫停</button>
+        <button id="muteBtn" type="button">音效：開</button>
+      </div>
+    </header>
+
+    <!-- 遊戲區：手機版會變成全螢幕，搖桿、觸控按鈕、設定都疊在這裡面 -->
+    <div class="arena" id="arena">
+      <div class="stage" id="stage">
+        <canvas id="game" aria-label="無人機遊戲畫面"></canvas>
+        <div class="tbtns">
+          <button type="button" class="round" id="tPause" aria-label="暫停">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button type="button" class="round" id="tSettings" aria-label="設定">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M4 7h10.2a3 3 0 0 1 5.6 0H20v2h-.2a3 3 0 0 1-5.6 0H4V7zm13 2a1 1 0 1 0 0-2 1 1 0 0 0 0 2zM4 15h.2a3 3 0 0 1 5.6 0H20v2H9.8a3 3 0 0 1-5.6 0H4v-2zm3 2a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="joy" id="joy" hidden><div class="knob" id="knob"></div></div>
+
+      <!-- 動作鈕：植保＝噴灑（按住）、空拍＝拍照；外圈顯示相機冷卻 -->
+      <button type="button" class="act" id="actBtn" aria-label="動作" hidden>
+        <span class="face">
+          <svg class="ic ic-spray" viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M9 3h6v3h2v3H7V6h2V3zm-3 8h12v2H6v-2z"/><circle cx="7" cy="17" r="1.4" fill="currentColor"/><circle cx="12" cy="18" r="1.4" fill="currentColor"/><circle cx="17" cy="17" r="1.4" fill="currentColor"/><circle cx="9.5" cy="21" r="1.2" fill="currentColor"/><circle cx="14.5" cy="21" r="1.2" fill="currentColor"/></svg>
+          <svg class="ic ic-photo" viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="currentColor" d="M8.5 4h7l1.5 2.5H20a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8.5a2 2 0 0 1 2-2h3L8.5 4zM12 17.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9zm0-2a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>
+        </span>
+      </button>
+
+      <div class="pad" id="pad">
+        <div class="grp">
+          <button type="button" data-k="left" aria-label="後退">◀</button>
+          <button type="button" data-k="right" aria-label="前進">▶</button>
+        </div>
+        <div class="grp">
+          <button type="button" data-k="down" aria-label="下降">▼</button>
+          <button type="button" data-k="up" aria-label="上升">▲</button>
+        </div>
+      </div>
+
+      <div class="sheet" id="settings" hidden>
+        <div class="sheet-card" role="dialog" aria-labelledby="setTitle">
+          <h2 id="setTitle">操作設定</h2>
+          <div class="field">
+            <span class="lbl">操作方式</span>
+            <div class="seg">
+              <input type="radio" name="mode" id="modeJoy" value="joy"><label for="modeJoy">虛擬搖桿</label>
+              <input type="radio" name="mode" id="modePad" value="pad"><label for="modePad">方向按鈕</label>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lbl">搖桿位置</span>
+            <div class="seg">
+              <input type="radio" name="side" id="sideL" value="left"><label for="sideL">左邊</label>
+              <input type="radio" name="side" id="sideR" value="right"><label for="sideR">右邊</label>
+            </div>
+          </div>
+          <div class="field">
+            <label class="lbl" for="sens">搖桿靈敏度 <b id="sensVal">100%</b></label>
+            <input type="range" id="sens" min="60" max="160" step="10" value="100">
+            <span class="hint">數值越高，手指移動越短就能推到最大推力</span>
+          </div>
+          <div class="field">
+            <span class="lbl">音效</span>
+            <div class="seg">
+              <input type="radio" name="snd" id="sndOn" value="on"><label for="sndOn">開</label>
+              <input type="radio" name="snd" id="sndOff" value="off"><label for="sndOff">關</label>
+            </div>
+          </div>
+          <button type="button" class="done" id="setDone">完成</button>
+        </div>
+      </div>
+
+      <div class="rotate" id="rotate" hidden>
+        <svg viewBox="0 0 64 64" width="72" height="72" aria-hidden="true">
+          <rect x="20" y="8" width="24" height="44" rx="4" fill="none" stroke="currentColor" stroke-width="3"/>
+          <path d="M50 40a18 18 0 0 1-14 14" fill="none" stroke="#ffa23f" stroke-width="3" stroke-linecap="round"/>
+          <path d="M36 50l0 5 5-1" fill="none" stroke="#ffa23f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <p>請把手機轉成橫向</p>
+        <span>橫向畫面比較大，搖桿也比較好操作</span>
+      </div>
+    </div>
+
+    <div class="help">
+      <span><kbd>↑</kbd> 上升（較耗電）</span>
+      <span><kbd>↓</kbd> 下降</span>
+      <span><kbd>←</kbd> <kbd>→</kbd> 後退／前進</span>
+      <span><kbd>空白鍵</kbd> 開始；遊戲中是動作鍵（噴灑／拍照）</span>
+      <span><kbd>P</kbd> 暫停</span>
+      <span><kbd>T</kbd> 暫停或墜機時回到選擇模式</span>
+      <span>標題畫面可選：完整挑戰、植保練習（只玩第二階段）、空拍練習（只玩第三階段）。</span>
+      <span><kbd>M</kbd> 靜音</span>
+      <span>用手機或平板開啟會自動切換成橫向全螢幕＋虛擬搖桿，右下角是動作鈕。</span>
+      <span>三個階段各 5 關：0 m 一般飛行 → 1500 m 植保作業（按住動作鍵噴灑農田，漏噴會加快耗電）→ 3000 m 空拍任務（按動作鍵拍下彩球、滑板等特殊物體）。每進入新階段，關卡從 LV 1 重新開始。</span>
+      <span>分數 ＝ 飛行距離（每公尺 1 分）＋ 噴灑農田（每塊 50 分）＋ 空拍照片（每張 100～150 分，完美構圖再加 50 分）。</span>
+    </div>
+  </div>
+
+<script>
+(() => {
+// ===== js/util.js =====
+// 逆風無人機：共用常數與工具函式
+// 所有 js 檔都是一般 <script>（不用 ES 模組，雙擊 index.html 才打得開），
+// 頂層宣告的變數與函式彼此共用；載入順序見 index.html。
+const W = 960, H = 540, GROUND = 64, M_PER_PX = 1 / 20, LEVEL_M = 300;
+const FN = 'Oxanium, "Noto Sans TC", monospace';
+const FT = '"Noto Sans TC", system-ui, sans-serif';
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// 網址 # 後面的測試捷徑，用 - 連接：#touch、#stage2、#stage3、#touch-stage3
+const HASH = location.hash.slice(1).toLowerCase().split('-');
+
+const cv = document.getElementById('game');
+const ctx = cv.getContext('2d');
+function resizeCanvas() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+resizeCanvas();
+addEventListener('resize', resizeCanvas);
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const lerp = (a, b, k) => a + (b - a) * k;
+const d2 = (ax, ay, bx, by) => (ax - bx) ** 2 + (ay - by) ** 2;
+function circRect(cx, cy, r, x, y, w, h) {
+  const nx = clamp(cx, x, x + w), ny = clamp(cy, y, y + h);
+  return d2(cx, cy, nx, ny) < r * r;
+}
+// 依權重抽一個 key，例如 { a: 3, b: 1 }
+function weighted(w) {
+  let sum = 0;
+  for (const k in w) sum += w[k];
+  let r = Math.random() * sum;
+  for (const k in w) { r -= w[k]; if (r <= 0) return k; }
+  return Object.keys(w)[0];
+}
+function rr(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+const hex = c => { const n = parseInt(c.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+// 兩個 #rrggbb 顏色混合，回傳 #rrggbb（可以再拿去混）
+function mix(a, b, k) {
+  const A = hex(a), B = hex(b);
+  return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join('');
+}
+
+// ===== js/audio.js =====
+// 逆風無人機：音效（全部用 Web Audio 即時產生，不需要音檔）
+let actx = null, muted = false, motor = null, hiss = null;
+
+function audio() {
+  if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return; } }
+  if (actx.state === 'suspended') actx.resume();
+  if (!motor) {
+    const o = actx.createOscillator(), f = actx.createBiquadFilter(), g = actx.createGain();
+    o.type = 'sawtooth'; o.frequency.value = 100;
+    f.type = 'lowpass'; f.frequency.value = 520;
+    g.gain.value = 0;
+    o.connect(f).connect(g).connect(actx.destination);
+    o.start();
+    motor = { o, g };
+  }
+}
+function motorSet(freq, vol) {
+  if (!motor) return;
+  const tt = actx.currentTime;
+  motor.o.frequency.setTargetAtTime(freq, tt, 0.06);
+  motor.g.gain.setTargetAtTime(muted ? 0 : vol, tt, 0.06);
+}
+function tone(freq, dur, type = 'sine', vol = 0.12, slide = 0, delay = 0) {
+  if (!actx || muted) return;
+  const tt = actx.currentTime + delay;
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, tt);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, freq + slide), tt + dur);
+  g.gain.setValueAtTime(vol, tt);
+  g.gain.exponentialRampToValueAtTime(0.001, tt + dur);
+  o.connect(g).connect(actx.destination);
+  o.start(tt); o.stop(tt + dur + 0.02);
+}
+function noiseBuffer(sec, shape) {
+  const len = Math.floor(actx.sampleRate * sec), b = actx.createBuffer(1, len, actx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * shape(i / len);
+  return b;
+}
+function boom() {
+  if (!actx || muted) return;
+  const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+  s.buffer = noiseBuffer(.7, k => Math.pow(1 - k, 2));
+  f.type = 'lowpass'; f.frequency.value = 800; g.gain.value = 0.45;
+  s.connect(f).connect(g).connect(actx.destination);
+  s.start();
+}
+// 相機快門：一段短促的高頻雜訊加一聲輕響
+function shutter() {
+  if (!actx || muted) return;
+  const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+  s.buffer = noiseBuffer(.09, k => (k < .3 ? 1 : .35) * (1 - k));
+  f.type = 'highpass'; f.frequency.value = 1800; g.gain.value = .35;
+  s.connect(f).connect(g).connect(actx.destination);
+  s.start();
+  tone(1500, .04, 'square', .04, 0, .07);
+}
+// 噴灑時的「嘶——」聲，持續播放，用音量開關
+function hissSet(on) {
+  if (!actx) return;
+  if (!hiss) {
+    const s = actx.createBufferSource(), f = actx.createBiquadFilter(), g = actx.createGain();
+    s.buffer = noiseBuffer(1, () => 1); s.loop = true;
+    f.type = 'bandpass'; f.frequency.value = 3200; f.Q.value = .8;
+    g.gain.value = 0;
+    s.connect(f).connect(g).connect(actx.destination);
+    s.start();
+    hiss = { g, v: 0 };
+  }
+  const v = on && !muted ? .045 : 0;
+  if (hiss.v === v) return;
+  hiss.v = v;
+  hiss.g.gain.setTargetAtTime(v, actx.currentTime, .05);
+}
+
+// ===== js/stages.js =====
+// 逆風無人機：三個階段的設定表、計分規則、空拍場景
+// 數值說明見 docs/第二第三階段製作方案.md
+// 每個階段 5 關（每關 300 m）；進入新階段時關卡從 LV 1 重新算，障礙物密度、風力、速度也一起回到起始值
+const STAGE_LEVELS = 5;
+const STAGES = [
+  { id: 1, from: 0, title: '第一階段：一般飛行', short: '一般飛行', craft: 'std',
+    thrust: 1, drain: 1, batMul: 1, obsMul: 1, boostGap: [14, 20], action: null },
+  { id: 2, from: STAGE_LEVELS * LEVEL_M, title: '第二階段：植保作業', short: '植保作業', craft: 'farm',
+    thrust: .92, drain: 1.3, batMul: .6, obsMul: 1.15, boostGap: [20, 26], action: 'spray' },
+  { id: 3, from: STAGE_LEVELS * LEVEL_M * 2, title: '第三階段：空拍任務', short: '空拍任務', craft: 'aerial',
+    thrust: 1.05, drain: 1, batMul: 1, obsMul: 1.2, boostGap: [14, 20], action: 'photo' },
+];
+function stageFor(m) {
+  let s = STAGES[0];
+  for (const st of STAGES) if (m >= st.from) s = st;
+  return s;
+}
+// 階段內的關卡（從 1 開始）；練習模式超過第 5 關會繼續往上加
+function levelFor(m, st) { return 1 + Math.floor(Math.max(0, m - st.from) / LEVEL_M); }
+// 遊戲模式：完整挑戰會依序經過三個階段；練習模式只玩單一階段（不會換到下一階段），最高分分開記錄
+const MODES = [
+  { id: 'full', name: '完整挑戰', sub: '一般飛行 → 植保 → 空拍', tip: '從 0 m 起飛，一路換機', start: 1, lock: false, key: 'drone-best-score' },
+  { id: 'farm', name: '植保練習', sub: '只玩第二階段（LV 1 起）', tip: '按住動作鍵噴灑農田', start: 2, lock: true, key: 'drone-best-score-farm' },
+  { id: 'aerial', name: '空拍練習', sub: '只玩第三階段（LV 1 起）', tip: '按動作鍵拍下特殊物體', start: 3, lock: true, key: 'drone-best-score-aerial' },
+];
+// 測試捷徑 #stage2、#stage3：標題畫面預先選好植保練習、空拍練習
+const START_MODE = HASH.includes('stage3') ? 2 : HASH.includes('stage2') ? 1 : 0;
+
+// 計分：總分 = 飛行距離（每公尺 1 分）+ 任務分數
+const SCORE = {
+  field: 50,       // 噴到一塊田
+  perfect: 50,     // 完美構圖加分
+  photo: { balloons: 100, skater: 150, kite: 100, hotair: 120, bouquet: 150 },
+};
+const SPECIAL_NAME = { balloons: '婚禮彩球', skater: '滑板選手', kite: '風箏', hotair: '熱氣球', bouquet: '新娘捧花' };
+
+// 第三階段每 400 m 輪換一個活動場地，各場地常出現的特殊物體不同
+const ZONES = [
+  { id: 'wedding', name: '婚禮草地', weights: { balloons: 3, bouquet: 2, kite: 1, hotair: 1, skater: 1 }, decor: ['arch', 'flowers', 'tent'] },
+  { id: 'skate', name: '滑板公園', weights: { skater: 4, balloons: 1, kite: 1, hotair: 1 }, decor: ['ramp', 'graffiti'] },
+  { id: 'beach', name: '海濱公園', weights: { kite: 3, hotair: 2, balloons: 1, skater: 1 }, decor: ['palm', 'umbrella'] },
+];
+function zoneFor(m) {
+  return ZONES[Math.floor(Math.max(0, m - STAGES[2].from) / 400) % ZONES.length];
+}
+
+// ===== js/input.js =====
+// 逆風無人機：輸入（鍵盤、虛擬搖桿、方向按鈕、動作鍵）與手機介面
+const keys = { up: false, down: false, left: false, right: false };
+const KEYMAP = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', KeyW: 'up', KeyS: 'down', KeyA: 'left', KeyD: 'right' };
+
+// 動作鍵：第二階段＝噴灑（按住），第三階段＝拍照（按一下）
+const act = { held: false };
+function actionDown() {
+  if (state !== 'play') return;
+  act.held = true;
+  if (stage.action === 'photo') takePhoto();
+}
+function actionUp() { act.held = false; }
+
+const MENU_KEYS = { Digit1: 0, Digit2: 1, Digit3: 2, Numpad1: 0, Numpad2: 1, Numpad3: 2 };
+function moveMenu(step) {
+  menuSel = (menuSel + step + MODES.length) % MODES.length;
+  tone(660, .05, 'sine', .05);
+}
+
+addEventListener('keydown', e => {
+  const k = KEYMAP[e.code];
+  // 標題畫面：←→（或 ↑↓）選模式，1／2／3 直接開始
+  if (state === 'title') {
+    if (k) { e.preventDefault(); if (!e.repeat) moveMenu(k === 'left' || k === 'up' ? -1 : 1); return; }
+    if (e.code in MENU_KEYS && !e.repeat) { menuSel = MENU_KEYS[e.code]; primary(); return; }
+  }
+  if (e.code === 'KeyT' && !e.repeat && (state === 'pause' || (state === 'over' && overDelay <= 0))) { goTitle(); return; }
+  if (k) { keys[k] = true; e.preventDefault(); }
+  if (e.code === 'Space' || e.code === 'KeyJ' || e.code === 'Enter') {
+    e.preventDefault();
+    if (e.repeat) return;   // 按住不放時不重複觸發，避免墜機後自動重新開始
+    if (state === 'play' && e.code !== 'Enter') actionDown();
+    else if (e.code !== 'KeyJ') primary();
+  }
+  if (e.code === 'KeyP' || e.code === 'Escape') togglePause();
+  if (e.code === 'KeyM') toggleMute();
+});
+addEventListener('keyup', e => {
+  const k = KEYMAP[e.code];
+  if (k) keys[k] = false;
+  if (e.code === 'Space' || e.code === 'KeyJ') actionUp();
+});
+function releaseAll() {
+  for (const k in keys) keys[k] = false;
+  document.querySelectorAll('.pad button').forEach(b => b.classList.remove('on'));
+  releaseJoy();
+  actionUp();
+}
+addEventListener('blur', () => { releaseAll(); if (state === 'play') togglePause(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(); });
+
+// ---------- 觸控模式（手機／平板） ----------
+// 觸控裝置自動啟用；電腦上在網址後面加 #touch 也能測試
+const isTouch = matchMedia('(pointer: coarse)').matches || HASH.includes('touch');
+const portraitMQ = matchMedia('(orientation: portrait)');
+const arena = document.getElementById('arena');
+const joyEl = document.getElementById('joy'), knobEl = document.getElementById('knob');
+const settingsEl = document.getElementById('settings'), rotateEl = document.getElementById('rotate');
+const sensEl = document.getElementById('sens'), sensVal = document.getElementById('sensVal');
+const actBtn = document.getElementById('actBtn');
+// 觸控比鍵盤不精準：碰撞範圍縮小 10%、風力影響減弱 15%
+const HIT_FACTOR = isTouch ? .9 : 1, WIND_FACTOR = isTouch ? .85 : 1;
+
+const settings = { mode: 'joy', side: 'left', sens: 100 };
+try { Object.assign(settings, JSON.parse(localStorage.getItem('drone-settings') || '{}')); } catch (e) {}
+function saveSettings() { try { localStorage.setItem('drone-settings', JSON.stringify(settings)); } catch (e) {} }
+
+// 浮動搖桿：x、y 為 -1～1 的類比值（y 負值代表往上）
+const joy = { active: false, id: null, cx: 0, cy: 0, x: 0, y: 0, R: 70 };
+const JOY_DEAD = .08;   // 中心死區（v0.6 由 12% 縮小為 8%，反應更靈敏）
+const joyRadius = () => clamp(Math.min(innerWidth, innerHeight) * .16, 48, 90);
+function placeJoy(cx, cy, kx, ky, ghost) {
+  const R = joy.R;
+  joyEl.style.width = joyEl.style.height = R * 2 + 'px';
+  joyEl.style.transform = `translate(${cx - R}px, ${cy - R}px)`;
+  knobEl.style.transform = `translate(${kx}px, ${ky}px)`;
+  joyEl.classList.toggle('ghost', ghost);
+}
+function inJoyZone(x) { return settings.side === 'right' ? x > innerWidth * .5 : x < innerWidth * .5; }
+function startJoy(e) {
+  joy.R = joyRadius();
+  joy.active = true; joy.id = e.pointerId;
+  joy.cx = clamp(e.clientX, joy.R + 8, innerWidth - joy.R - 8);
+  joy.cy = clamp(e.clientY, joy.R + 8, innerHeight - joy.R - 8);
+  moveJoy(e);
+}
+function moveJoy(e) {
+  const dx = e.clientX - joy.cx, dy = e.clientY - joy.cy;
+  const len = Math.hypot(dx, dy), R = joy.R;
+  const reach = R / (settings.sens / 100);   // 靈敏度越高，推到最大所需的距離越短
+  let m = Math.min(1, len / reach);
+  m = m < JOY_DEAD ? 0 : (m - JOY_DEAD) / (1 - JOY_DEAD);
+  joy.x = len ? dx / len * m : 0;
+  joy.y = len ? dy / len * m : 0;
+  const kl = Math.min(len, R);
+  placeJoy(joy.cx, joy.cy, len ? dx / len * kl : 0, len ? dy / len * kl : 0, false);
+}
+function releaseJoy() { joy.active = false; joy.id = null; joy.x = 0; joy.y = 0; }
+
+// 鍵盤、方向按鈕、搖桿統一成同一組類比輸入
+function readInput() {
+  if (joy.active) return { x: joy.x, y: joy.y };
+  return { x: (keys.right ? 1 : 0) - (keys.left ? 1 : 0), y: (keys.down ? 1 : 0) - (keys.up ? 1 : 0) };
+}
+
+// 畫在 canvas 上的按鈕（模式卡片、重新開始、選擇模式）：每一幀由 hud.js 登記 { x, y, w, h, action, hover }
+let uiButtons = [];
+function canvasPoint(e) {
+  const r = cv.getBoundingClientRect();
+  return { x: (e.clientX - r.left) / r.width * W, y: (e.clientY - r.top) / r.height * H };
+}
+function uiButtonAt(e) {
+  const p = canvasPoint(e);
+  return uiButtons.find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h);
+}
+arena.addEventListener('pointermove', e => {
+  if (state !== 'title' || e.pointerType === 'touch') return;
+  const b = uiButtonAt(e);
+  if (b && b.hover) b.hover();
+  cv.style.cursor = b ? 'pointer' : 'default';
+});
+
+arena.addEventListener('pointerdown', e => {
+  if (e.target.closest('button, .sheet, .rotate')) return;
+  if (state !== 'play') {
+    const b = uiButtonAt(e);
+    if (b) { audio(); b.action(); }
+    else if (state !== 'title') primary();   // 標題畫面要點模式卡片才開始
+    return;
+  }
+  if (isTouch && settings.mode === 'joy' && !joy.active && inJoyZone(e.clientX)) {
+    e.preventDefault();
+    startJoy(e);
+  }
+});
+addEventListener('pointermove', e => { if (joy.active && e.pointerId === joy.id) moveJoy(e); });
+const endJoy = e => { if (joy.active && e.pointerId === joy.id) releaseJoy(); };
+addEventListener('pointerup', endJoy);
+addEventListener('pointercancel', endJoy);
+document.addEventListener('gesturestart', e => e.preventDefault());   // iOS 雙指縮放
+
+// 手機的動作鍵（噴灑／拍照）
+actBtn.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  try { actBtn.setPointerCapture(e.pointerId); } catch (_) {}
+  actionDown();
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => actBtn.addEventListener(type, actionUp));
+
+function applySettings() {
+  document.body.classList.toggle('touch', isTouch);
+  document.body.classList.toggle('mode-pad', settings.mode === 'pad');
+  document.body.classList.toggle('side-right', settings.side === 'right');
+  document.getElementById(settings.mode === 'pad' ? 'modePad' : 'modeJoy').checked = true;
+  document.getElementById(settings.side === 'right' ? 'sideR' : 'sideL').checked = true;
+  document.getElementById(muted ? 'sndOff' : 'sndOn').checked = true;
+  sensEl.value = settings.sens;
+  sensVal.textContent = settings.sens + '%';
+  if (settings.mode === 'pad') releaseJoy();
+}
+settingsEl.addEventListener('change', e => {
+  const el = e.target;
+  if (el.name === 'mode') settings.mode = el.value;
+  if (el.name === 'side') settings.side = el.value;
+  if (el.name === 'snd' && (el.value === 'off') !== muted) toggleMute();
+  saveSettings(); applySettings();
+});
+sensEl.addEventListener('input', () => { settings.sens = Number(sensEl.value); sensVal.textContent = settings.sens + '%'; saveSettings(); });
+document.getElementById('tPause').addEventListener('click', () => togglePause());
+document.getElementById('tSettings').addEventListener('click', () => { if (state === 'play') togglePause(); settingsEl.hidden = false; });
+document.getElementById('setDone').addEventListener('click', () => { settingsEl.hidden = true; });
+
+function goFullscreen() {
+  if (!isTouch || document.fullscreenElement || document.webkitFullscreenElement) return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el, { navigationUI: 'hide' });
+    if (p && p.then) {
+      p.then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (_) {} }).catch(() => {});
+    }
+  } catch (_) {}
+}
+
+// 每一幀同步：直向提示、搖桿、動作鍵
+function syncTouchUI() {
+  if (!isTouch) return;
+  const portrait = portraitMQ.matches;
+  rotateEl.hidden = !portrait;
+  if (portrait && state === 'play') togglePause();
+  const inGame = (state === 'play' || state === 'pause') && settingsEl.hidden && !portrait;
+  const showJoy = settings.mode === 'joy' && inGame;
+  joyEl.hidden = !showJoy;
+  if (showJoy && !joy.active) {
+    joy.R = joyRadius();
+    const edge = Math.max(joy.R + 24, innerWidth * .14);
+    placeJoy(settings.side === 'right' ? innerWidth - edge : edge, innerHeight * .68, 0, 0, true);
+  }
+  actBtn.hidden = !(inGame && stage.action);
+  if (!actBtn.hidden) {
+    if (actBtn.dataset.kind !== stage.action) actBtn.dataset.kind = stage.action;
+    actBtn.style.setProperty('--p', stage.action === 'photo' ? (1 - camCD / CAM_CD).toFixed(3) : '1');
+    actBtn.classList.toggle('on', act.held);
+  }
+}
+
+document.querySelectorAll('.pad button').forEach(btn => {
+  const k = btn.dataset.k;
+  const on = e => { e.preventDefault(); keys[k] = true; btn.classList.add('on'); try { btn.setPointerCapture(e.pointerId); } catch (_) {} if (state === 'title' || (state === 'over' && overDelay <= 0)) primary(); };
+  const off = () => { keys[k] = false; btn.classList.remove('on'); };
+  btn.addEventListener('pointerdown', on);
+  btn.addEventListener('pointerup', off);
+  btn.addEventListener('pointercancel', off);
+  btn.addEventListener('lostpointercapture', off);
+});
+
+const pauseBtn = document.getElementById('pauseBtn');
+const muteBtn = document.getElementById('muteBtn');
+pauseBtn.addEventListener('click', () => { togglePause(); pauseBtn.blur(); });
+muteBtn.addEventListener('click', () => { toggleMute(); muteBtn.blur(); });
+function toggleMute() {
+  muted = !muted;
+  muteBtn.textContent = muted ? '音效：關' : '音效：開';
+  if (muted) { motorSet(100, 0); hissSet(false); }
+}
+function togglePause() {
+  if (state === 'play') {
+    state = 'pause'; motorSet(100, 0); hissSet(false);
+    pauseBtn.textContent = '繼續';
+    releaseJoy(); actionUp();
+  } else if (state === 'pause') {
+    if (isTouch && portraitMQ.matches) return;   // 直向時不繼續
+    state = 'play'; pauseBtn.textContent = '暫停';
+  }
+}
+function primary() {
+  audio();
+  if (state === 'title') { goFullscreen(); startGame(MODES[menuSel]); }
+  else if (state === 'over' && overDelay <= 0) { goFullscreen(); startGame(mode); }   // 同一個模式再玩一次
+  else if (state === 'pause') togglePause();
+}
+applySettings();
+
+// ===== js/world.js =====
+// 逆風無人機：障礙物、道具的生成與碰撞判定
+// 無人機碰撞圓（相對機身中心）與機身底部高度，依機型不同
+const CRAFT_HITS = {
+  std: [[-22, -8, 9], [22, -8, 9], [0, -1, 11]],
+  farm: [[-30, -8, 9], [30, -8, 9], [0, 4, 13]],
+  aerial: [[-22, -8, 9], [22, -8, 9], [0, -1, 11]],
+};
+const CRAFT_BOTTOM = { std: 14, farm: 24, aerial: 14 };
+const REASON = {
+  building: '撞上高樓', pipe: '撞上管道', cloud: '闖進雷雨雲', bird: '與鳥相撞',
+  barn: '撞上農舍', trees: '撞上防風樹', powerline: '勾到電線',
+};
+
+function objW(o) { return o.w || o.span || (o.type === 'cloud' ? 100 : 40); }
+
+function obstaclePool() {
+  if (stage.id === 2) {
+    const p = ['barn', 'barn', 'powerline', 'powerline', 'trees', 'cloud', 'bird', 'bird'];
+    if (level >= 4) p.push('bird', 'powerline');
+    return p;
+  }
+  const p = ['building', 'building', 'cloud'];
+  if (level >= 2) p.push('bird', 'bird');
+  if (level >= 3) p.push('pipe', 'pipe');
+  if (level >= 5) p.push('bird', 'cloud', 'pipe');
+  return p;
+}
+
+// 農田與地面障礙物不能重疊：算出各自佔用的地面範圍，把新物件往右推到空位
+function fieldRanges() { return fields.map(f => [f.x - 20, f.x + f.w + 20]); }
+function groundRanges() {
+  const out = [];
+  for (const o of obstacles) {
+    if (o.type === 'barn' || o.type === 'trees') out.push([o.x - 20, o.x + o.w + 20]);
+    else if (o.type === 'powerline') out.push([o.x - 24, o.x + 24], [o.x + o.span - 24, o.x + o.span + 24]);
+  }
+  return out;
+}
+function clearX(x, w, ranges) {
+  for (let i = 0; i < 8; i++) {
+    let moved = false;
+    for (const [a, b] of ranges) if (x < b && x + w > a) { x = b + 1; moved = true; }
+    if (!moved) break;
+  }
+  return x;
+}
+// 電線桿只要兩根桿子都不站在農田裡就好，電線可以跨過農田
+function clearPoles(x, span) {
+  const ranges = fieldRanges();
+  for (let i = 0; i < 8; i++) {
+    let moved = false;
+    for (const [a, b] of ranges) {
+      if (x + 6 > a && x - 6 < b) { x = b + 7; moved = true; }
+      else if (x + span + 6 > a && x + span - 6 < b) { x += b - (x + span) + 7; moved = true; }
+    }
+    if (!moved) break;
+  }
+  return x;
+}
+
+function spawnObstacle() {
+  const pool = obstaclePool();
+  let type = pick(pool);
+  if (type === lastType && type !== 'bird') type = pick(pool);
+  lastType = type;
+  const gy = H - GROUND;
+
+  const made = [];
+  if (type === 'building') {
+    const w = rand(70, 120);
+    const h = rand(90, Math.min(H - GROUND - 150, 190 + level * 25));
+    const cols = Math.floor((w - 12) / 16), rows = Math.floor((h - 20) / 22);
+    const lit = Array.from({ length: cols * rows }, () => Math.random() < .45);
+    made.push({ type, x: W + 20, y: gy - h, w, h, cols, rows, lit, hue: pick(['#3b4a5a', '#44505f', '#4d4759', '#3c5352']), antenna: Math.random() < .6 });
+  } else if (type === 'pipe') {
+    const gap = Math.max(150, 215 - level * 8);
+    const center = rand(70 + gap / 2, H - GROUND - 50 - gap / 2);
+    made.push({ type, x: W + 20, w: 70, gapTop: center - gap / 2, gapBot: center + gap / 2 });
+  } else if (type === 'cloud') {
+    const s = rand(.85, 1.3);
+    made.push({ type, x: W + 60, y: rand(60, H * .5), s, extra: rand(15, 55), bob: rand(0, 6), flash: 0,
+      puffs: [[0, 0, 36], [32, -14, 32], [62, 2, 34], [30, 14, 30], [-26, 8, 26]] });
+  } else if (type === 'bird') {
+    const n = level >= 4 ? 1 + ((Math.random() * 3) | 0) : 1;
+    const y0 = rand(70, H - GROUND - 140), extra = rand(80, 150);
+    for (let i = 0; i < n; i++) {
+      made.push({ type, x: W + 30 + i * 46, y: y0 + i * 26, y0: y0 + i * 26, amp: rand(20, 55), freq: rand(1.6, 2.6), phase: rand(0, 6), extra });
+    }
+  } else if (type === 'barn') {
+    const w = rand(90, 140), h = rand(70, Math.min(170, 90 + level * 12));
+    made.push({ type, x: clearX(W + 20, w, fieldRanges()), w, h, y: gy - h, hue: pick(['#a8443a', '#9a3f36', '#b5523f']) });
+  } else if (type === 'trees') {
+    const n = 2 + ((Math.random() * 3) | 0), trees = [];
+    let dx = 0;
+    for (let i = 0; i < n; i++) { const r = rand(18, 26); trees.push({ dx: dx + r, r, h: rand(70, 140) }); dx += r * 2 - 6; }
+    made.push({ type, x: clearX(W + 20, dx, fieldRanges()), w: dx, trees });
+  } else if (type === 'powerline') {
+    const span = rand(180, 300);
+    // 電線最低點離地至少 130 px，植保機可以從電線下方鑽過去噴灑
+    made.push({ type, x: clearPoles(W + 20, span), span, ph: rand(160, 230), sag: 24 });
+  }
+  obstacles.push(...made);
+  // 剛生成的道具如果被新障礙物蓋住，就移到空位；找不到空位就移除
+  for (const p of pickups) {
+    if (p.x < W - 220) continue;
+    if (made.some(o => hitObs(o, p.x, p.y, 26))) {
+      const y = freeY(p.x);
+      if (y === null) p.dead = true; else p.y = y;
+    }
+  }
+  pickups = pickups.filter(p => !p.dead);
+}
+
+function freeY(x) {
+  for (let i = 0; i < 14; i++) {
+    const y = rand(50, H - GROUND - 40);
+    if (!obstacles.some(o => hitObs(o, x, y, 30))) return y;
+  }
+  return null;
+}
+// 回傳是否成功生成；失敗時由呼叫端稍後再試
+function spawnBattery() {
+  const x = W + 40, y = freeY(x);
+  if (y === null) return false;
+  pickups.push({ kind: 'battery', x, y, ph: rand(0, 6) });
+  // 第二階段有 30% 機率一次出現兩顆（上下錯開）
+  if (stage.id === 2 && Math.random() < .3) {
+    const y2 = freeY(x + 70);
+    if (y2 !== null && Math.abs(y2 - y) > 60) pickups.push({ kind: 'battery', x: x + 70, y: y2, ph: rand(0, 6) });
+  }
+  return true;
+}
+function spawnBooster() {
+  const x = W + 40, y = freeY(x);
+  if (y === null) return false;
+  pickups.push({ kind: 'boost', x, y, ph: rand(0, 6) });
+  return true;
+}
+
+function smash(o) {
+  o.dead = true;
+  const cx = (o.type === 'bird' || o.type === 'cloud') ? o.x : o.x + objW(o) / 2;
+  const cy = drone.y;
+  for (let i = 0; i < 24; i++) {
+    const a = rand(0, Math.PI * 2), v = rand(80, 320);
+    particles.push({ x: cx + rand(-20, 20), y: cy + rand(-20, 20), vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, life: rand(.4, .9), max: .9,
+      size: rand(3, 7), color: pick(['#ffa23f', '#c9d3db', '#6b7483', '#ffd98a']), grav: 450 });
+  }
+  floaters.push({ x: cx, y: cy - 30, text: '撞碎！', color: '#ffd35a', life: .8 });
+  tone(160, .2, 'square', .08, -80);
+  shake = reduceMotion ? 0 : 5;
+}
+
+function hitObs(o, cx, cy, r) {
+  const gy = H - GROUND;
+  switch (o.type) {
+    case 'building': return circRect(cx, cy, r, o.x, o.y, o.w, o.h);
+    case 'pipe': return circRect(cx, cy, r, o.x, 0, o.w, o.gapTop - 22) || circRect(cx, cy, r, o.x - 6, o.gapTop - 22, o.w + 12, 22)
+      || circRect(cx, cy, r, o.x - 6, o.gapBot, o.w + 12, 22) || circRect(cx, cy, r, o.x, o.gapBot + 22, o.w, H - GROUND - o.gapBot - 22);
+    case 'cloud': return o.puffs.some(p => d2(cx, cy, o.x + p[0] * o.s, o.y + p[1] * o.s) < (r + p[2] * o.s * .78) ** 2);
+    case 'bird': return d2(cx, cy, o.x, o.y) < (r + 11) ** 2;
+    case 'barn': return circRect(cx, cy, r, o.x, o.y, o.w, o.h) || circRect(cx, cy, r, o.x + o.w * .2, o.y - 30, o.w * .6, 30);
+    case 'trees': return o.trees.some(tr => d2(cx, cy, o.x + tr.dx, gy - tr.h) < (r + tr.r * .9) ** 2
+      || circRect(cx, cy, r, o.x + tr.dx - 4, gy - tr.h, 8, tr.h));
+    case 'powerline': {
+      const top = gy - o.ph;
+      if (circRect(cx, cy, r, o.x - 4, top, 8, o.ph) || circRect(cx, cy, r, o.x + o.span - 4, top, 8, o.ph)) return true;
+      const n = Math.ceil(o.span / 10);
+      for (let i = 0; i <= n; i++) {
+        const s = i / n;
+        if (d2(cx, cy, o.x + s * o.span, top + 6 + 4 * o.sag * s * (1 - s)) < (r + 3) ** 2) return true;
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
+// ===== js/farm.js =====
+// 逆風無人機：第二階段植保作業（農田、噴灑判定、漏噴懲罰）
+const SPRAY_CEIL = 240;     // 噴桿離地 240 px（約 12 m）以內，霧才落得到地面
+const SPRAY_HALF = 35;      // 噴霧落地範圍：左右各 35 px
+const MISS_TIME = 6;        // 漏噴懲罰持續秒數
+let fields = [], fieldT = 0, farmHints = 0;
+let penalty = { stacks: 0, t: 0 };
+let spraying = false, sprayEffective = false;
+
+function resetFarm() {
+  fields = []; fieldT = 1.2; farmHints = 0;
+  penalty = { stacks: 0, t: 0 };
+  spraying = false; sprayEffective = false;
+}
+// 漏噴一塊耗電 ×1.5，連續漏噴每塊再 +0.5，最多 ×2.5
+function penaltyMul() { return penalty.t > 0 ? 1 + .5 * penalty.stacks : 1; }
+
+function spawnField() {
+  const w = rand(140, 260);
+  let x = W + 40;
+  const lastF = fields[fields.length - 1];
+  if (lastF) x = Math.max(x, lastF.x + lastF.w + 50);
+  x = clearX(x, w, groundRanges());
+  fields.push({ x, w, kind: pick(['rice', 'cabbage', 'orchard']), state: 'todo', t: 0, hint: farmHints-- > 0 });
+}
+
+function fieldDone(f) {
+  f.state = 'done'; f.t = 0;
+  sc.fields++;
+  addScore(SCORE.field, f.x + f.w / 2, H - GROUND - 56, '噴灑完成 +' + SCORE.field, '#7fe0a0');
+  tone(784, .08, 'triangle', .07); tone(1046, .12, 'triangle', .07, 0, .06);
+  for (let i = 0; i < 12; i++) {
+    particles.push({ x: f.x + rand(0, f.w), y: H - GROUND - 6, vx: rand(-30, 30), vy: rand(-140, -60), life: .5, max: .5, size: 3, color: '#9dffbf', grav: 200 });
+  }
+}
+function fieldMissed(f) {
+  f.state = 'miss'; f.t = 0;
+  sc.missed++;
+  penalty.stacks = Math.min(3, penalty.stacks + 1);
+  penalty.t = MISS_TIME;
+  redFlash = .6;
+  floaters.push({ x: f.x + f.w / 2, y: H - GROUND - 56, text: '漏噴！耗電加快', color: '#ff5a4e', life: 1.2 });
+  tone(220, .12, 'square', .07); tone(196, .16, 'square', .07, 0, .16);
+}
+
+function updateFarm(dt, ws) {
+  for (const f of fields) { f.x -= ws * dt; f.t += dt; }
+  fields = fields.filter(f => f.x + f.w > -60);
+  if (penalty.t > 0) { penalty.t -= dt; if (penalty.t <= 0) { penalty.t = 0; penalty.stacks = 0; } }
+  if (state !== 'play') { spraying = false; sprayEffective = false; hissSet(false); return; }
+
+  if (stage.id === 2 && transitionT <= 0) {
+    fieldT -= dt;
+    if (fieldT <= 0) { spawnField(); fieldT = rand(2.5, 4); }
+  }
+
+  // 噴灑：噴灑本身不扣電
+  const d = drone;
+  spraying = act.held && stage.action === 'spray' && d.powered;
+  hissSet(spraying);
+  sprayEffective = false;
+  if (spraying) {
+    const nozzleY = d.y + 22, alt = (H - GROUND) - nozzleY;
+    sprayEffective = alt <= SPRAY_CEIL;
+    const windX = wind.x * WIND_FACTOR * .3;          // 噴霧隨風飄移
+    for (let i = 0; i < 4; i++) {
+      const life = sprayEffective ? Math.max(.05, alt / 300) : SPRAY_CEIL / 300 * rand(.4, .9);
+      particles.push({ x: d.x + rand(-30, 30), y: nozzleY, vx: windX + rand(-15, 15), vy: 300, life, max: life,
+        size: rand(2, 3.5), color: 'rgba(190,235,255,.75)', grav: 0 });
+    }
+    if (sprayEffective) {
+      const drift = windX * Math.max(0, alt) / 300;
+      const x0 = d.x - SPRAY_HALF + drift, x1 = d.x + SPRAY_HALF + drift;
+      // 只要噴霧落地範圍跟農田有任何重疊，就算完成
+      for (const f of fields) if (f.state === 'todo' && x1 > f.x && x0 < f.x + f.w) fieldDone(f);
+    }
+  }
+
+  // 農田飛過無人機後方還沒噴到＝漏噴；加速中飛過的田不罰也不給分
+  for (const f of fields) {
+    if (f.state !== 'todo' || f.x + f.w >= d.x - 40) continue;
+    if (boostMul > 1.05) f.state = 'skip';
+    else fieldMissed(f);
+  }
+}
+
+// ---------- 繪圖 ----------
+const CROP = { todo: '#c9b95a', done: '#5fd16a', miss: '#8f8b6c', skip: '#b3a95e' };
+function drawFields() {
+  const gy = H - GROUND;
+  for (const f of fields) {
+    if (f.x > W + 20 || f.x + f.w < -20) continue;
+    ctx.fillStyle = '#5a4128'; ctx.fillRect(f.x, gy, f.w, 18);
+    ctx.fillStyle = 'rgba(0,0,0,.15)';
+    for (let x = f.x + 6; x < f.x + f.w - 4; x += 14) ctx.fillRect(x, gy + 4, 8, 2);
+    const c = CROP[f.state];
+    if (f.kind === 'rice') {
+      ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let x = f.x + 8; x < f.x + f.w - 4; x += 11) {
+        ctx.moveTo(x, gy); ctx.lineTo(x - 3, gy - 12);
+        ctx.moveTo(x, gy); ctx.lineTo(x, gy - 15);
+        ctx.moveTo(x, gy); ctx.lineTo(x + 3, gy - 12);
+      }
+      ctx.stroke();
+    } else if (f.kind === 'cabbage') {
+      for (let x = f.x + 12; x < f.x + f.w - 8; x += 19) {
+        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, gy - 6, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.arc(x - 2, gy - 8, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      for (let x = f.x + 18; x < f.x + f.w - 12; x += 34) {
+        ctx.fillStyle = '#6b4a2e'; ctx.fillRect(x - 2, gy - 14, 4, 14);
+        ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, gy - 22, 12, 0, Math.PI * 2); ctx.fill();
+        if (f.state === 'done') {
+          ctx.fillStyle = '#ff9f3a';
+          ctx.beginPath(); ctx.arc(x - 5, gy - 20, 2.5, 0, Math.PI * 2); ctx.arc(x + 5, gy - 25, 2.5, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+    }
+    // 狀態標記
+    const mx = f.x + f.w / 2;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (f.state === 'todo') {
+      const by = gy - 48 + Math.sin(t * 4 + f.x * .01) * 3;
+      ctx.fillStyle = 'rgba(255,162,63,.9)'; ctx.beginPath(); ctx.arc(mx, by, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#1a1206'; ctx.font = `900 14px ${FT}`; ctx.fillText('!', mx, by + 1);
+      if (f.hint && state === 'play') {
+        ctx.fillStyle = '#ffffff'; ctx.font = `900 15px ${FT}`;
+        ctx.fillText(isTouch ? '飛到農田上方，按住動作鈕噴灑' : '飛到農田上方，按住 空白鍵 噴灑', clamp(mx, 150, W - 150), gy - 76);
+      }
+    } else if (f.state === 'done' && f.t < 1.2) {
+      ctx.globalAlpha = 1 - f.t / 1.2;
+      ctx.fillStyle = '#5fd16a'; ctx.beginPath(); ctx.arc(mx, gy - 48, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(mx - 5, gy - 48); ctx.lineTo(mx - 1, gy - 44); ctx.lineTo(mx + 6, gy - 52); ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else if (f.state === 'miss' && f.t < 1.4) {
+      ctx.globalAlpha = 1 - f.t / 1.4;
+      ctx.strokeStyle = '#ff5a4e'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(mx - 8, gy - 56); ctx.lineTo(mx + 8, gy - 40); ctx.moveTo(mx + 8, gy - 56); ctx.lineTo(mx - 8, gy - 40); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+// 噴灑有效高度的虛線，提醒玩家要低空飛行
+function drawSprayGuide() {
+  if (stage.id !== 2 || (state !== 'play' && state !== 'pause')) return;
+  const y = H - GROUND - SPRAY_CEIL;
+  ctx.strokeStyle = spraying && !sprayEffective ? 'rgba(255,90,78,.7)' : 'rgba(255,255,255,.3)';
+  ctx.lineWidth = 1.5; ctx.setLineDash([8, 8]);
+  ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.font = `700 11px ${FT}`; ctx.textAlign = 'left';
+  ctx.fillText('噴灑有效高度', 14, y - 6);
+}
+
+// ===== js/aerial.js =====
+// 逆風無人機：第三階段空拍任務（特殊飛行物體、取景框、拍照、相簿、活動場地布景）
+const VF = { dx: 200, w: 220, h: 160 };   // 取景框：無人機前方 200 px 為中心
+const CAM_CD = .5;                         // 拍照冷卻秒數
+const PHOTO_COST = 1;                      // 每拍一張扣 1% 電量
+const SPECIAL_HIT = 15;                    // 撞到特殊物體扣 15% 電量（不墜機）
+const BALLOON_COLORS = ['#ff6b8a', '#ffd35a', '#7fd3ff', '#b48cff', '#7fe0a0', '#ff9f3a', '#ffffff'];
+let specials = [], specialT = 0, aerialHints = 0;
+let camCD = 0, flashT = 0, album = [], cards = [];
+let decor = [], decorT = 0, zone = null, zoneToast = 0, seaA = 0, lockPrev = false;
+
+function resetAerial() {
+  specials = []; specialT = 1.5; aerialHints = 0;
+  camCD = 0; flashT = 0; album = []; cards = [];
+  decor = []; decorT = 0; zone = null; zoneToast = 0; seaA = 0; lockPrev = false;
+}
+
+// 取景框整個留在畫面內，才不會拍到還沒出現在畫面上的物體
+function vfRect() {
+  const cx = Math.min(drone.x + VF.dx, W - VF.w / 2 - 6), cy = clamp(drone.y, VF.h / 2 + 4, H - VF.h / 2 - 4);
+  return { x: cx - VF.w / 2, y: cy - VF.h / 2, w: VF.w, h: VF.h, cx, cy };
+}
+const kitePos = o => ({ x: o.x - 50 + Math.sin(o.t * 1.3 + o.ph) * 40, y: H - GROUND - o.h + Math.sin(o.t * 2.1 + o.ph) * 30 });
+const bouquetPos = o => o.thrown ? { x: o.x, y: o.y } : { x: o.bx + 8, y: H - GROUND - 28 };
+function specialCenter(o) {
+  if (o.kind === 'kite') return kitePos(o);
+  if (o.kind === 'bouquet') return bouquetPos(o);
+  if (o.kind === 'skater') return { x: o.x, y: o.y - 6 };
+  return { x: o.x, y: o.y };
+}
+function inFrame(o) {
+  const c = specialCenter(o), f = vfRect();
+  return c.x >= f.x && c.x <= f.x + f.w && c.y >= f.y && c.y <= f.y + f.h;
+}
+
+function spawnSpecial() {
+  const gy = H - GROUND;
+  const kind = weighted(zone.weights);
+  const o = { kind, t: 0, ph: rand(0, 6), hint: aerialHints-- > 0 };
+  if (kind === 'balloons') {
+    const offs = [[0, -22], [-17, -10], [17, -10], [-9, 6], [9, 6], [0, -6]].map(([x, y]) => [x + rand(-3, 3), y + rand(-3, 3)]);
+    Object.assign(o, { x: W + 40, y: rand(H * .45, gy - 70), vy: -rand(22, 40), extra: rand(-10, 20), offs,
+      colors: offs.map(() => pick(BALLOON_COLORS)) });
+  } else if (kind === 'skater') {
+    // 滑板選手比地面捲得快，追上前方的跳台後拋物線飛起
+    const extra = rand(50, 100), ws = speed * boostMul;
+    const jumpX = rand(W * .55, W * .85), x = W + 60;
+    const T = (x - jumpX) / (ws + extra);
+    Object.assign(o, { x, y: gy - 22, vy: 0, air: false, jumped: false, rot: 0, extra, rampX: jumpX + ws * T, suit: pick(['#3f7fd3', '#d33f6a', '#2f9e6b']) });
+  } else if (kind === 'kite') {
+    Object.assign(o, { x: W + 120, h: rand(150, 270), colors: [pick(BALLOON_COLORS), pick(['#3f7fd3', '#d33f6a', '#2f9e6b'])] });
+  } else if (kind === 'hotair') {
+    Object.assign(o, { x: W + 80, y: rand(130, 260), extra: -rand(20, 40), colors: [pick(['#ff6b8a', '#ff9f3a', '#b48cff']), pick(['#ffd35a', '#ffffff', '#7fd3ff'])] });
+  } else if (kind === 'bouquet') {
+    Object.assign(o, { bx: W + 30, x: W + 38, y: gy - 28, vy: 0, thrown: false, rot: 0, extra: rand(-20, 10), throwAt: rand(W * .55, W * .9) });
+  }
+  specials.push(o);
+}
+
+function spawnDecor() {
+  const kind = pick(zone.decor);
+  decor.push({ kind, x: W + 80, colors: [pick(BALLOON_COLORS), pick(BALLOON_COLORS), pick(['#3f7fd3', '#d33f6a', '#2f9e6b'])] });
+}
+
+function updateAerial(dt, ws) {
+  const gy = H - GROUND;
+  if (stage.id === 3) {
+    const z = zoneFor(dist);
+    if (z !== zone) { zone = z; zoneToast = 2.5; }
+  }
+  seaA += (((stage.id === 3 && zone && zone.id === 'beach') ? 1 : 0) - seaA) * Math.min(1, dt * 1.2);
+  zoneToast = Math.max(0, zoneToast - dt);
+  camCD = Math.max(0, camCD - dt);
+  flashT = Math.max(0, flashT - dt);
+  for (const c of cards) c.t += dt;
+  cards = cards.filter(c => c.t < .7);
+  for (const dc of decor) dc.x -= ws * dt;
+  decor = decor.filter(dc => dc.x > -200);
+
+  for (const o of specials) {
+    o.t += dt;
+    if (o.kind === 'balloons') { o.x -= (ws + o.extra) * dt; o.y += o.vy * dt; }
+    else if (o.kind === 'skater') {
+      o.x -= (ws + o.extra) * dt; o.rampX -= ws * dt;
+      if (!o.jumped && o.x <= o.rampX) { o.jumped = true; o.air = true; o.vy = -rand(520, 620); }
+      if (o.air) {
+        o.vy += 620 * dt; o.y += o.vy * dt; o.rot += dt * 9;
+        if (o.y >= gy - 22) { o.y = gy - 22; o.air = false; o.vy = 0; o.rot = 0; }
+      }
+    } else if (o.kind === 'kite') o.x -= ws * dt;
+    else if (o.kind === 'hotair') { o.x -= (ws + o.extra) * dt; o.y += Math.sin(o.t * .8 + o.ph) * 8 * dt; }
+    else if (o.kind === 'bouquet') {
+      o.bx -= ws * dt;
+      if (!o.thrown) {
+        o.x = o.bx + 8; o.y = gy - 28;
+        if (o.bx < o.throwAt) { o.thrown = true; o.vy = -rand(520, 640); }
+      } else {
+        o.x -= (ws + o.extra) * dt; o.vy += 700 * dt; o.y += o.vy * dt; o.rot += dt * 8;
+        if (o.y > gy + 20) o.gone = true;
+      }
+    }
+  }
+  specials = specials.filter(o => {
+    if (o.dead || o.gone) return false;
+    const c = specialCenter(o);
+    const right = o.kind === 'bouquet' ? Math.max(o.bx, c.x) : o.kind === 'kite' ? Math.max(o.x, c.x) : c.x;
+    return right > -120 && c.y > -140;
+  });
+
+  if (stage.id === 3) {
+    decorT -= dt;
+    if (decorT <= 0) { spawnDecor(); decorT = rand(1.2, 2.4); }
+  }
+  if (state !== 'play' || stage.id !== 3) return;
+  if (transitionT <= 0) {
+    specialT -= dt;
+    if (specialT <= 0) { spawnSpecial(); specialT = rand(3, 5); }
+  }
+  // 特殊物體進入取景框時提示一聲
+  const lock = specials.some(inFrame);
+  if (lock && !lockPrev) tone(1320, .05, 'sine', .04);
+  lockPrev = lock;
+}
+
+function takePhoto() {
+  if (state !== 'play' || stage.action !== 'photo' || camCD > 0 || !drone.powered) return;
+  camCD = CAM_CD; flashT = .12;
+  shutter();
+  battery = Math.max(0, battery - PHOTO_COST);
+  const f = vfRect();
+  let got = 0;
+  for (const o of specials) {
+    if (!inFrame(o)) continue;
+    const c = specialCenter(o);
+    // 物體中心離框中心夠近（框的 35% 以內）＝完美構圖
+    const perfect = Math.abs(c.x - f.cx) <= f.w / 2 * .35 && Math.abs(c.y - f.cy) <= f.h / 2 * .35;
+    o.dead = true; got++;
+    sc.photos++;
+    if (perfect) sc.perfect++;
+    album.push({ kind: o.kind, perfect });
+    const pts = SCORE.photo[o.kind] + (perfect ? SCORE.perfect : 0);
+    addScore(pts, c.x, c.y - 34, (perfect ? '完美構圖！+' : '+') + pts, perfect ? '#ffd35a' : '#ffffff');
+    cards.push({ x: c.x, y: c.y, t: 0, kind: o.kind, perfect });
+  }
+  if (!got) floaters.push({ x: f.cx, y: f.y - 10, text: '沒有拍到特殊物體', color: '#c9dbe2', life: .8 });
+  specials = specials.filter(o => !o.dead);
+}
+
+function hitSpecial(o, cx, cy, r) {
+  if (o.kind === 'balloons') return o.offs.some(([ox, oy]) => d2(cx, cy, o.x + ox, o.y + oy) < (r + 11) ** 2);
+  if (o.kind === 'skater') return circRect(cx, cy, r, o.x - 14, o.y - 30, 28, 52);
+  if (o.kind === 'hotair') return d2(cx, cy, o.x, o.y) < (r + 44) ** 2 || circRect(cx, cy, r, o.x - 12, o.y + 52, 24, 18);
+  const c = specialCenter(o);
+  return d2(cx, cy, c.x, c.y) < (r + (o.kind === 'kite' ? 18 : 11)) ** 2;
+}
+// 撞到特殊物體：不墜機，扣電量並短暫無敵
+function hitSpecialObject(o) {
+  o.dead = true;
+  battery = Math.max(0, battery - SPECIAL_HIT);
+  hurtT = 1; redFlash = .6;
+  const c = specialCenter(o);
+  const colors = o.colors || ['#ffffff', '#ffd35a'];
+  for (let i = 0; i < 18; i++) {
+    const a = rand(0, Math.PI * 2), v = rand(80, 260);
+    particles.push({ x: c.x, y: c.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .7, max: .7, size: rand(3, 6), color: pick(colors), grav: 300 });
+  }
+  floaters.push({ x: c.x, y: c.y - 30, text: '撞到' + SPECIAL_NAME[o.kind] + '！-' + SPECIAL_HIT + '% 電量', color: '#ff5a4e', life: 1.3 });
+  tone(180, .2, 'sawtooth', .08, -60);
+  shake = reduceMotion ? 0 : 6;
+}
+
+// ---------- 繪圖 ----------
+function drawSpecial(o) {
+  const gy = H - GROUND;
+  if (o.kind === 'balloons') {
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const [ox, oy] of o.offs) { ctx.moveTo(o.x + ox, o.y + oy + 12); ctx.lineTo(o.x, o.y + 44); }
+    ctx.stroke();
+    o.offs.forEach(([ox, oy], i) => {
+      const sway = Math.sin(o.t * 2 + i) * 2;
+      ctx.fillStyle = o.colors[i];
+      ctx.beginPath(); ctx.ellipse(o.x + ox + sway, o.y + oy, 11, 13, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.45)';
+      ctx.beginPath(); ctx.ellipse(o.x + ox + sway - 4, o.y + oy - 5, 3, 4, -.5, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.fillStyle = '#ff6b8a';
+    ctx.beginPath(); ctx.moveTo(o.x - 6, o.y + 50); ctx.lineTo(o.x, o.y + 44); ctx.lineTo(o.x + 6, o.y + 50); ctx.fill();
+  } else if (o.kind === 'skater') {
+    if (o.rampX > -80 && o.rampX < W + 80) {
+      ctx.fillStyle = '#8a96a3';
+      ctx.beginPath(); ctx.moveTo(o.rampX + 34, gy); ctx.lineTo(o.rampX - 8, gy - 24); ctx.lineTo(o.rampX - 8, gy); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#5b6672'; ctx.fillRect(o.rampX - 10, gy - 24, 4, 24);
+    }
+    ctx.save(); ctx.translate(o.x, o.y);
+    ctx.save(); ctx.translate(0, 21); ctx.rotate(o.air ? Math.sin(o.rot) * .7 : 0);
+    ctx.fillStyle = '#ff9f3a'; rr(-18, -3, 36, 5, 2); ctx.fill();
+    ctx.fillStyle = '#2b3440'; ctx.beginPath(); ctx.arc(-11, 4, 3, 0, Math.PI * 2); ctx.arc(11, 4, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(-3, 2); ctx.lineTo(-8, 18); ctx.moveTo(3, 2); ctx.lineTo(8, 18); ctx.stroke();
+    ctx.strokeStyle = o.suit; ctx.lineWidth = 8;
+    ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(0, 2); ctx.stroke();
+    ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(0, -10); ctx.lineTo(-14, o.air ? -22 : -3); ctx.moveTo(0, -10); ctx.lineTo(14, o.air ? -20 : -1); ctx.stroke();
+    ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(0, -22, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ff4d6d'; ctx.beginPath(); ctx.arc(0, -23, 7, Math.PI, 0); ctx.fill();
+    ctx.restore();
+  } else if (o.kind === 'kite') {
+    const k = kitePos(o);
+    ctx.strokeStyle = 'rgba(255,255,255,.65)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(o.x, gy - 14); ctx.quadraticCurveTo((o.x + k.x) / 2 + 20, (gy + k.y) / 2 + 30, k.x, k.y + 18); ctx.stroke();
+    // 放風箏的人
+    ctx.fillStyle = '#2b3440'; ctx.fillRect(o.x - 2, gy - 22, 4, 22);
+    ctx.beginPath(); ctx.arc(o.x, gy - 26, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.save(); ctx.translate(k.x, k.y); ctx.rotate(Math.sin(o.t * 1.7 + o.ph) * .25);
+    ctx.fillStyle = o.colors[0];
+    ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(14, 0); ctx.lineTo(0, 20); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = o.colors[1];
+    ctx.beginPath(); ctx.moveTo(0, -20); ctx.lineTo(-14, 0); ctx.lineTo(0, 20); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(0, 20);
+    for (let i = 1; i <= 4; i++) ctx.quadraticCurveTo(8 * (i % 2 ? 1 : -1) + i * 5, 20 + i * 9 - 4, i * 6, 20 + i * 9);
+    ctx.stroke();
+    ctx.restore();
+  } else if (o.kind === 'hotair') {
+    ctx.strokeStyle = '#5b4632'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(o.x - 22, o.y + 36); ctx.lineTo(o.x - 11, o.y + 52); ctx.moveTo(o.x + 22, o.y + 36); ctx.lineTo(o.x + 11, o.y + 52); ctx.stroke();
+    ctx.fillStyle = '#8a5a34'; ctx.fillRect(o.x - 12, o.y + 52, 24, 18);
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(o.x, o.y, 44, 46, 0, 0, Math.PI * 2); ctx.clip();
+    ctx.fillStyle = o.colors[0]; ctx.fillRect(o.x - 46, o.y - 48, 92, 96);
+    ctx.fillStyle = o.colors[1];
+    for (let i = -2; i <= 2; i += 2) ctx.fillRect(o.x + i * 14 - 7, o.y - 48, 14, 96);
+    ctx.restore();
+    ctx.fillStyle = 'rgba(255,255,255,.25)'; ctx.beginPath(); ctx.ellipse(o.x - 16, o.y - 18, 9, 16, -.3, 0, Math.PI * 2); ctx.fill();
+    if (Math.sin(o.t * 9) > .3) { ctx.fillStyle = '#ffd35a'; ctx.beginPath(); ctx.arc(o.x, o.y + 48, 4, 0, Math.PI * 2); ctx.fill(); }
+  } else if (o.kind === 'bouquet') {
+    if (o.bx > -40 && o.bx < W + 40) {
+      // 新娘
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(o.bx - 11, gy); ctx.lineTo(o.bx + 11, gy); ctx.lineTo(o.bx, gy - 30); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#f2c9a0'; ctx.beginPath(); ctx.arc(o.bx, gy - 35, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.beginPath(); ctx.moveTo(o.bx - 2, gy - 40); ctx.lineTo(o.bx - 12, gy - 18); ctx.lineTo(o.bx + 2, gy - 32); ctx.fill();
+    }
+    const b = bouquetPos(o);
+    ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(o.rot);
+    ctx.fillStyle = '#4f9a5a'; ctx.fillRect(-2, 2, 4, 10);
+    [['#ff6b8a', -5, -2], ['#ffffff', 5, -2], ['#ffd35a', 0, -7], ['#ff9fb6', 0, 2]].forEach(([c, x, y]) => {
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y, 5, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+  }
+  if (o.hint && state === 'play') {
+    const c = specialCenter(o);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff'; ctx.font = `900 14px ${FT}`;
+    ctx.fillText(isTouch ? '讓它進入取景框，按動作鈕拍照' : '讓它進入取景框，按 空白鍵 拍照', clamp(c.x, 150, W - 150), Math.max(c.y - 62, 130));
+  }
+}
+
+// 相簿與拍立得小卡用的縮小圖示
+function drawSpecialIcon(kind, x, y, s) {
+  ctx.save(); ctx.translate(x, y); ctx.scale(s, s);
+  if (kind === 'balloons') {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-7, 2); ctx.lineTo(0, 14); ctx.moveTo(7, 2); ctx.lineTo(0, 14); ctx.moveTo(0, -6); ctx.lineTo(0, 14); ctx.stroke();
+    [['#ff6b8a', -7, -4], ['#ffd35a', 7, -4], ['#7fd3ff', 0, -12]].forEach(([c, bx, by]) => {
+      ctx.fillStyle = c; ctx.beginPath(); ctx.ellipse(bx, by, 6, 7, 0, 0, Math.PI * 2); ctx.fill();
+    });
+  } else if (kind === 'skater') {
+    ctx.save(); ctx.rotate(-.3);
+    ctx.fillStyle = '#ff9f3a'; rr(-12, 8, 24, 4, 2); ctx.fill();
+    ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, -4); ctx.lineTo(0, 4); ctx.moveTo(0, 4); ctx.lineTo(-5, 8); ctx.moveTo(0, 4); ctx.lineTo(5, 8);
+    ctx.moveTo(0, -2); ctx.lineTo(-9, -8); ctx.moveTo(0, -2); ctx.lineTo(9, -8); ctx.stroke();
+    ctx.fillStyle = '#ff4d6d'; ctx.beginPath(); ctx.arc(0, -9, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  } else if (kind === 'kite') {
+    ctx.fillStyle = '#ff6b8a'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(9, 0); ctx.lineTo(0, 13); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#3f7fd3'; ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(-9, 0); ctx.lineTo(0, 13); ctx.closePath(); ctx.fill();
+  } else if (kind === 'hotair') {
+    ctx.fillStyle = '#ff9f3a'; ctx.beginPath(); ctx.arc(0, -4, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffd35a'; ctx.fillRect(-3, -16, 6, 24);
+    ctx.fillStyle = '#8a5a34'; ctx.fillRect(-4, 10, 8, 6);
+  } else if (kind === 'bouquet') {
+    ctx.fillStyle = '#4f9a5a'; ctx.fillRect(-2, 2, 4, 10);
+    [['#ff6b8a', -5, -2], ['#ffffff', 5, -2], ['#ffd35a', 0, -7]].forEach(([c, bx, by]) => {
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(bx, by, 5, 0, Math.PI * 2); ctx.fill();
+    });
+  }
+  ctx.restore();
+}
+function drawPolaroid(x, y, w, h, kind, perfect) {
+  ctx.fillStyle = '#fbfaf6'; rr(x, y, w, h, 3); ctx.fill();
+  ctx.fillStyle = '#9fd3ea'; ctx.fillRect(x + 4, y + 4, w - 8, h - 16);
+  drawSpecialIcon(kind, x + w / 2, y + 4 + (h - 16) / 2, (w - 8) / 34);
+  if (perfect) { ctx.strokeStyle = '#ffc93a'; ctx.lineWidth = 3; rr(x, y, w, h, 3); ctx.stroke(); }
+}
+
+function drawDecor(dc) {
+  const gy = H - GROUND, x = dc.x;
+  if (dc.kind === 'arch') {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x, gy - 64); ctx.arc(x + 36, gy - 64, 36, Math.PI, 0); ctx.lineTo(x + 72, gy); ctx.stroke();
+    for (let a = 0; a <= 8; a++) {
+      const ang = Math.PI + a / 8 * Math.PI;
+      ctx.fillStyle = a % 2 ? '#ff9fb6' : '#ffffff';
+      ctx.beginPath(); ctx.arc(x + 36 + Math.cos(ang) * 36, gy - 64 + Math.sin(ang) * 36, 5, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (dc.kind === 'flowers') {
+    ctx.fillStyle = '#3f8a4a'; ctx.beginPath(); ctx.ellipse(x + 30, gy, 32, 22, 0, Math.PI, 0); ctx.fill();
+    for (let i = 0; i < 7; i++) { ctx.fillStyle = i % 2 ? dc.colors[0] : '#ffffff'; ctx.beginPath(); ctx.arc(x + 8 + i * 7.5, gy - 8 - (i % 3) * 5, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  } else if (dc.kind === 'tent') {
+    ctx.fillStyle = '#f4f1ea'; ctx.beginPath(); ctx.moveTo(x, gy); ctx.lineTo(x + 10, gy - 44); ctx.lineTo(x + 45, gy - 64); ctx.lineTo(x + 80, gy - 44); ctx.lineTo(x + 90, gy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = 'rgba(255,159,182,.6)'; ctx.fillRect(x + 10, gy - 44, 70, 6);
+  } else if (dc.kind === 'ramp') {
+    ctx.fillStyle = '#9aa5b1'; ctx.beginPath(); ctx.moveTo(x, gy); ctx.quadraticCurveTo(x + 64, gy, x + 70, gy - 60); ctx.lineTo(x + 80, gy - 60); ctx.lineTo(x + 80, gy); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#5b6672'; ctx.fillRect(x + 68, gy - 64, 14, 4);
+  } else if (dc.kind === 'graffiti') {
+    ctx.fillStyle = '#8f9aa6'; ctx.fillRect(x, gy - 56, 110, 56);
+    ctx.lineWidth = 5; ctx.lineCap = 'round';
+    dc.colors.forEach((c, i) => {
+      ctx.strokeStyle = c; ctx.beginPath(); ctx.moveTo(x + 12 + i * 30, gy - 16);
+      ctx.bezierCurveTo(x + 20 + i * 30, gy - 50, x + 34 + i * 30, gy - 8, x + 38 + i * 30, gy - 38); ctx.stroke();
+    });
+  } else if (dc.kind === 'palm') {
+    ctx.strokeStyle = '#8a6a44'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.moveTo(x, gy); ctx.quadraticCurveTo(x + 4, gy - 60, x + 18, gy - 108); ctx.stroke();
+    ctx.strokeStyle = '#3f8a4a'; ctx.lineWidth = 5;
+    for (const [dx, dy] of [[-30, 10], [-20, -12], [10, -16], [32, 2], [26, 18]]) {
+      ctx.beginPath(); ctx.moveTo(x + 18, gy - 108); ctx.quadraticCurveTo(x + 18 + dx * .6, gy - 118 + dy * .4, x + 18 + dx, gy - 104 + dy); ctx.stroke();
+    }
+  } else if (dc.kind === 'umbrella') {
+    ctx.fillStyle = '#e8d2a6'; ctx.fillRect(x - 20, gy - 4, 46, 4);
+    ctx.fillStyle = '#5b6672'; ctx.fillRect(x - 1, gy - 52, 3, 52);
+    for (let i = 0; i < 4; i++) {
+      ctx.fillStyle = i % 2 ? '#ffffff' : dc.colors[0];
+      ctx.beginPath(); ctx.moveTo(x, gy - 52); ctx.arc(x, gy - 52, 32, Math.PI + i * Math.PI / 4, Math.PI + (i + 1) * Math.PI / 4); ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+function drawViewfinder() {
+  if (stage.id !== 3 || (state !== 'play' && state !== 'pause')) return;
+  const f = vfRect(), lock = specials.some(inFrame), L = 22;
+  ctx.strokeStyle = lock ? '#ffa23f' : 'rgba(255,255,255,.6)'; ctx.lineWidth = lock ? 3 : 2; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(f.x, f.y + L); ctx.lineTo(f.x, f.y); ctx.lineTo(f.x + L, f.y);
+  ctx.moveTo(f.x + f.w - L, f.y); ctx.lineTo(f.x + f.w, f.y); ctx.lineTo(f.x + f.w, f.y + L);
+  ctx.moveTo(f.x + f.w, f.y + f.h - L); ctx.lineTo(f.x + f.w, f.y + f.h); ctx.lineTo(f.x + f.w - L, f.y + f.h);
+  ctx.moveTo(f.x + L, f.y + f.h); ctx.lineTo(f.x, f.y + f.h); ctx.lineTo(f.x, f.y + f.h - L);
+  ctx.moveTo(f.cx - 6, f.cy); ctx.lineTo(f.cx + 6, f.cy); ctx.moveTo(f.cx, f.cy - 6); ctx.lineTo(f.cx, f.cy + 6);
+  ctx.stroke();
+  ctx.textAlign = 'left'; ctx.font = `800 12px ${FT}`;
+  ctx.fillStyle = lock ? '#ffa23f' : 'rgba(255,255,255,.7)';
+  ctx.fillText(lock ? '可以拍了！' : '取景框', f.x + 4, f.y - 7);
+  if (camCD > 0) {
+    ctx.strokeStyle = '#ffa23f'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(f.x + f.w - 10, f.y - 12, 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (1 - camCD / CAM_CD)); ctx.stroke();
+  }
+}
+
+function drawCards() {
+  const tx = 40, ty = 100 * HUD_S;
+  for (const c of cards) {
+    const k = Math.min(1, c.t / .7), e = 1 - (1 - k) * (1 - k);
+    ctx.save();
+    ctx.translate(lerp(c.x, tx, e), lerp(c.y, ty, e));
+    ctx.rotate((1 - e) * .3);
+    ctx.scale(1 - .65 * e, 1 - .65 * e);
+    ctx.globalAlpha = k > .85 ? (1 - k) / .15 : 1;
+    drawPolaroid(-22, -26, 44, 52, c.kind, c.perfect);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawFlash() {
+  if (flashT <= 0) return;
+  ctx.fillStyle = `rgba(255,255,255,${(flashT / .12) * .55})`;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// 第三階段海濱公園的海面
+function drawSea(a) {
+  const gy = H - GROUND, top = gy - 64, ga = ctx.globalAlpha;
+  ctx.globalAlpha = ga * a;
+  const g = ctx.createLinearGradient(0, top, 0, gy);
+  g.addColorStop(0, mix('#5fb0d2', '#22384a', skyF)); g.addColorStop(1, mix('#2f7fa8', '#182a38', skyF));
+  ctx.fillStyle = g; ctx.fillRect(0, top, W, 64);
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 2;
+  const off = (bgX * .3) % 60;
+  for (let row = 0; row < 3; row++) {
+    const y = top + 14 + row * 16;
+    ctx.beginPath();
+    for (let x = -off - 60 + row * 20; x < W; x += 60) { ctx.moveTo(x, y); ctx.quadraticCurveTo(x + 10, y - 4, x + 20, y); }
+    ctx.stroke();
+  }
+  ctx.globalAlpha = ga;
+}
+
+// ===== js/draw.js =====
+// 逆風無人機：背景、地面、障礙物、道具、三種無人機的繪圖
+const skyline = [];
+const SKY_LEN = 1800;
+{ let x = 0; while (x < SKY_LEN - 60) { const w = rand(40, 100), h = rand(40, 150); skyline.push({ x, w, h }); x += w + rand(4, 16); } }
+// 第二階段遠景：防風林與農舍剪影
+const farmline = [];
+const FARM_LEN = 1600;
+{
+  let x = 0;
+  while (x < FARM_LEN - 80) {
+    if (Math.random() < .25) { const w = rand(50, 80); farmline.push({ x, kind: 'house', w, h: rand(30, 46) }); x += w + rand(24, 60); }
+    else { const r = rand(14, 26); farmline.push({ x: x + r, kind: 'tree', r, h: rand(26, 50) }); x += r * 2 - 4; }
+  }
+}
+
+function hills(color, base, a1, a2, f1, f2, k) {
+  const gy = H - GROUND;
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.moveTo(0, gy);
+  for (let x = 0; x <= W; x += 16) {
+    const wx = x + bgX * k;
+    ctx.lineTo(x, gy - base - Math.sin(wx * f1) * a1 - Math.sin(wx * f2 + 1) * a2 - Math.sin(wx * .023) * 8);
+  }
+  ctx.lineTo(W, gy); ctx.fill();
+}
+
+function drawSkyline(color) {
+  const gy = H - GROUND;
+  ctx.fillStyle = color;
+  const o = (bgX * .35) % SKY_LEN;
+  for (let rep = 0; rep < 2; rep++) {
+    for (const b of skyline) {
+      const x = b.x - o + rep * SKY_LEN;
+      if (x > W || x + b.w < 0) continue;
+      ctx.fillRect(x, gy - b.h * .7, b.w, b.h * .7);
+    }
+  }
+}
+
+// 各階段的遠景
+function drawScenery(id) {
+  const gy = H - GROUND;
+  if (id === 2) {
+    hills(mix('#a7cf9b', '#2f4034', skyF), 100, 30, 16, .003, .009, .1);
+    ctx.fillStyle = mix('#5f8f5a', '#22332a', skyF);
+    const o = (bgX * .35) % FARM_LEN;
+    for (let rep = 0; rep < 2; rep++) {
+      for (const it of farmline) {
+        const x = it.x - o + rep * FARM_LEN;
+        if (x > W + 60 || x < -100) continue;
+        if (it.kind === 'tree') {
+          ctx.beginPath(); ctx.arc(x, gy - it.h, it.r, 0, Math.PI * 2); ctx.fill();
+          ctx.fillRect(x - 3, gy - it.h, 6, it.h);
+        } else {
+          ctx.fillRect(x, gy - it.h, it.w, it.h);
+          ctx.beginPath(); ctx.moveTo(x - 6, gy - it.h); ctx.lineTo(x + it.w / 2, gy - it.h - 22); ctx.lineTo(x + it.w + 6, gy - it.h); ctx.closePath(); ctx.fill();
+        }
+      }
+    }
+    return;
+  }
+  hills(mix(id === 3 ? '#a9c7d6' : '#9cc3cf', '#2c3746', skyF), 120, 42, 22, .004, .011, .12);
+  if (id === 3 && seaA > .01) drawSea(seaA);
+  const ga = ctx.globalAlpha;
+  if (id === 3) ctx.globalAlpha = ga * (1 - seaA * .85);   // 海濱場地看不到城市
+  drawSkyline(mix(id === 3 ? '#93aebf' : '#7b98a8', '#232d3a', skyF));
+  ctx.globalAlpha = ga;
+}
+
+function drawBackground() {
+  const g = ctx.createLinearGradient(0, 0, 0, H - GROUND);
+  g.addColorStop(0, mix('#5fa8d3', '#1a2634', skyF));
+  g.addColorStop(1, mix('#ffe2b4', '#4b5467', skyF));
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // sun fading behind the storm
+  ctx.fillStyle = `rgba(255,236,190,${.85 - skyF * .7})`;
+  ctx.beginPath(); ctx.arc(760, 120, 46, 0, Math.PI * 2); ctx.fill();
+
+  // 換階段時，新場景在 1.5 秒內淡入
+  if (prevStage && stageBlend < 1) {
+    drawScenery(prevStage.id);
+    ctx.globalAlpha = stageBlend;
+    drawScenery(stage.id);
+    ctx.globalAlpha = 1;
+  } else drawScenery(stage.id);
+
+  // wind streaks
+  ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5;
+  const len = clamp(Math.hypot(wind.x, wind.y) / 8, 10, 60);
+  const ang = Math.atan2(wind.y * 1.2, -speed * .6 + wind.x * 1.6);
+  for (const s of streaks) {
+    ctx.globalAlpha = Math.min(1, s.life * 2);
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - Math.cos(ang) * len, s.y - Math.sin(ang) * len); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// 地面顏色：[底色, 草皮邊]
+const GROUND_PAL = { 1: ['#4c6b3c', '#6f9352'], 2: ['#6a5034', '#7f9a4a'], 3: ['#4f7a45', '#86b062'] };
+function groundColor(i) {
+  const cur = GROUND_PAL[stage.id][i];
+  const c = prevStage && stageBlend < 1 ? mix(GROUND_PAL[prevStage.id][i], cur, stageBlend) : cur;
+  return mix(c, '#232e25', skyF * .55);
+}
+function drawGround() {
+  const gy = H - GROUND;
+  ctx.fillStyle = groundColor(0);
+  ctx.fillRect(0, gy, W, GROUND);
+  ctx.fillStyle = groundColor(1);
+  ctx.fillRect(0, gy, W, 6);
+  ctx.fillStyle = 'rgba(0,0,0,.18)';
+  const off = bgX % 48;
+  for (let x = -off; x < W; x += 48) ctx.fillRect(x, gy + 26, 24, 4);
+
+  // distance posts every 100 m
+  if (state !== 'title') {
+    const camPx = flown() / M_PER_PX;   // 里程牌顯示這一局飛了多遠（練習模式從 0 m 算起）
+    const first = Math.floor((camPx - 200) * M_PER_PX / 100) * 100;
+    for (let m = Math.max(100, first); m < first + 400; m += 100) {
+      const x = m / M_PER_PX - camPx + 180;
+      if (x < -40 || x > W + 40) continue;
+      ctx.fillStyle = '#dfe6e0'; ctx.fillRect(x - 2, gy - 22, 4, 22);
+      ctx.fillStyle = m % LEVEL_M === 0 ? '#ffa23f' : '#eef3ee';
+      rr(x - 22, gy - 38, 44, 18, 3); ctx.fill();
+      ctx.fillStyle = '#1b2530'; ctx.font = `700 12px ${FN}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(m + 'm', x, gy - 29);
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+// ---------- 障礙物 ----------
+function drawObstacle(o) {
+  if (o.type === 'building') drawBuilding(o);
+  else if (o.type === 'pipe') drawPipe(o);
+  else if (o.type === 'bird') drawBird(o);
+  else if (o.type === 'barn') drawBarn(o);
+  else if (o.type === 'trees') drawTrees(o);
+  else if (o.type === 'powerline') drawPowerline(o);
+}
+
+function drawBuilding(o) {
+  ctx.fillStyle = o.hue; ctx.fillRect(o.x, o.y, o.w, o.h);
+  ctx.fillStyle = 'rgba(255,255,255,.08)'; ctx.fillRect(o.x, o.y, 6, o.h);
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(o.x, o.y, o.w, 5);
+  const pad = (o.w - o.cols * 16 + 6) / 2;
+  for (let r = 0; r < o.rows; r++) for (let c = 0; c < o.cols; c++) {
+    ctx.fillStyle = o.lit[r * o.cols + c] ? '#ffd98a' : 'rgba(10,20,30,.45)';
+    ctx.fillRect(o.x + pad + c * 16, o.y + 14 + r * 22, 10, 12);
+  }
+  if (o.antenna) {
+    const ax = o.x + o.w * .7;
+    ctx.strokeStyle = '#2a323c'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(ax, o.y); ctx.lineTo(ax, o.y - 26); ctx.stroke();
+    // aviation obstruction light
+    ctx.fillStyle = Math.sin(t * 5 + o.x * .01) > 0 ? '#ff4d3d' : '#6a1f18';
+    ctx.beginPath(); ctx.arc(ax, o.y - 28, 4, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawPipe(o) {
+  const body = (x, y, w, h) => {
+    const g = ctx.createLinearGradient(x, 0, x + w, 0);
+    g.addColorStop(0, '#3f6238'); g.addColorStop(.35, '#93c47c'); g.addColorStop(1, '#355330');
+    ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = '#223a20'; ctx.lineWidth = 2; ctx.strokeRect(x + 1, y + 1, w - 2, h - 2);
+  };
+  body(o.x, 0, o.w, o.gapTop - 22);
+  body(o.x - 6, o.gapTop - 22, o.w + 12, 22);
+  body(o.x - 6, o.gapBot, o.w + 12, 22);
+  body(o.x, o.gapBot + 22, o.w, H - GROUND - o.gapBot - 22);
+  // rivet bands
+  ctx.fillStyle = 'rgba(20,35,20,.4)';
+  for (let y = o.gapTop - 70; y > 0; y -= 70) ctx.fillRect(o.x, y, o.w, 5);
+  for (let y = o.gapBot + 70; y < H - GROUND; y += 70) ctx.fillRect(o.x, y, o.w, 5);
+}
+
+function drawCloud(o) {
+  const y = o.y + Math.sin(t * 1.4 + o.bob) * 4;
+  if (o.flash > 0) {
+    ctx.strokeStyle = '#fff3a0'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    let bx = o.x + 30 * o.s, by = y + 30 * o.s;
+    ctx.moveTo(bx, by);
+    for (let i = 0; i < 4; i++) { bx += rand(-14, 14); by += 22; ctx.lineTo(bx, by); }
+    ctx.stroke();
+  }
+  ctx.fillStyle = o.flash > 0 ? '#9aa3b5' : mix('#6b7483', '#3d4452', skyF);
+  for (const [px, py, pr] of o.puffs) { ctx.beginPath(); ctx.arc(o.x + px * o.s, y + py * o.s, pr * o.s, 0, Math.PI * 2); ctx.fill(); }
+  ctx.fillStyle = 'rgba(255,255,255,.14)';
+  for (const [px, py, pr] of o.puffs) { ctx.beginPath(); ctx.arc(o.x + px * o.s - 4, y + py * o.s - 6, pr * o.s * .6, 0, Math.PI * 2); ctx.fill(); }
+}
+
+function drawBird(o) {
+  const flap = Math.sin(t * 14 + o.phase) * 12;
+  ctx.save(); ctx.translate(o.x, o.y);
+  ctx.strokeStyle = '#1e2029'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-4, 0); ctx.quadraticCurveTo(6, -flap, 16, -flap * .9); ctx.stroke();
+  ctx.fillStyle = '#2a2c36';
+  ctx.beginPath(); ctx.ellipse(0, 0, 13, 7, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(10, 0); ctx.lineTo(20, -5); ctx.lineTo(20, 5); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#ffa23f';
+  ctx.beginPath(); ctx.moveTo(-12, -2); ctx.lineTo(-20, 1); ctx.lineTo(-12, 3); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-7, -2, 1.8, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-2, 0); ctx.quadraticCurveTo(-8, -flap, -16, -flap * .8);
+  ctx.strokeStyle = '#1e2029'; ctx.stroke();
+  ctx.restore();
+}
+
+function drawBarn(o) {
+  const { x, y, w, h } = o;
+  ctx.fillStyle = o.hue; ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = '#4a3a34';
+  ctx.beginPath(); ctx.moveTo(x - 6, y + 2); ctx.lineTo(x + w / 2, y - 32); ctx.lineTo(x + w + 6, y + 2); ctx.closePath(); ctx.fill();
+  const dw = Math.min(40, w * .4), dh = Math.min(h * .6, 56), dx = x + w / 2 - dw / 2, dy = y + h - dh;
+  ctx.fillStyle = '#7d2f28'; ctx.fillRect(dx, dy, dw, dh);
+  ctx.strokeStyle = '#f3ede4'; ctx.lineWidth = 3; ctx.strokeRect(dx, dy, dw, dh);
+  ctx.beginPath(); ctx.moveTo(dx, dy); ctx.lineTo(dx + dw, dy + dh); ctx.moveTo(dx + dw, dy); ctx.lineTo(dx, dy + dh); ctx.stroke();
+  if (h > 100) { ctx.fillStyle = '#f3ede4'; ctx.fillRect(x + w / 2 - 8, y + 10, 16, 14); }
+}
+
+function drawTrees(o) {
+  const gy = H - GROUND;
+  for (const tr of o.trees) {
+    ctx.fillStyle = '#6b4a2e'; ctx.fillRect(o.x + tr.dx - 4, gy - tr.h, 8, tr.h);
+    ctx.fillStyle = mix('#2f7a3e', '#1d3a25', skyF);
+    ctx.beginPath(); ctx.arc(o.x + tr.dx, gy - tr.h, tr.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.12)';
+    ctx.beginPath(); ctx.arc(o.x + tr.dx - tr.r * .3, gy - tr.h - tr.r * .3, tr.r * .45, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawPowerline(o) {
+  const gy = H - GROUND, top = gy - o.ph;
+  for (const px of [o.x, o.x + o.span]) {
+    ctx.fillStyle = '#6b5440'; ctx.fillRect(px - 4, top, 8, o.ph);
+    ctx.fillStyle = '#4a3a2c'; ctx.fillRect(px - 18, top + 4, 36, 5);
+    ctx.fillStyle = '#d9e2e6'; ctx.fillRect(px - 16, top - 2, 4, 6); ctx.fillRect(px + 12, top - 2, 4, 6);
+  }
+  // 二次貝茲曲線的中點下垂量剛好等於 sag，跟碰撞判定一致
+  ctx.strokeStyle = '#1d2228'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(o.x, top + 6); ctx.quadraticCurveTo(o.x + o.span / 2, top + 6 + 2 * o.sag, o.x + o.span, top + 6); ctx.stroke();
+}
+
+// ---------- 道具 ----------
+function drawBattery(p) {
+  const y = p.y + Math.sin(t * 3 + p.ph) * 4;
+  const glow = .25 + Math.sin(t * 5 + p.ph) * .12;
+  ctx.fillStyle = `rgba(127,224,160,${glow})`;
+  ctx.beginPath(); ctx.arc(p.x, y, 26, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#1b2a22'; rr(p.x - 17, y - 10, 32, 20, 4); ctx.fill();
+  ctx.fillRect(p.x + 15, y - 5, 4, 10);
+  ctx.fillStyle = '#7fe0a0'; rr(p.x - 14, y - 7, 26, 14, 2); ctx.fill();
+  ctx.fillStyle = '#10301d';
+  ctx.beginPath(); ctx.moveTo(p.x + 2, y - 6); ctx.lineTo(p.x - 5, y + 1); ctx.lineTo(p.x, y + 1); ctx.lineTo(p.x - 2, y + 6); ctx.lineTo(p.x + 5, y - 1); ctx.lineTo(p.x, y - 1); ctx.closePath(); ctx.fill();
+}
+
+function drawBooster(p) {
+  const y = p.y + Math.sin(t * 3 + p.ph) * 4;
+  const glow = .28 + Math.sin(t * 6 + p.ph) * .12;
+  ctx.fillStyle = `rgba(255,162,63,${glow})`;
+  ctx.beginPath(); ctx.arc(p.x, y, 27, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#2a1a0c';
+  ctx.beginPath(); ctx.arc(p.x, y, 17, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#ffa23f'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(p.x, y, 17, 0, Math.PI * 2); ctx.stroke();
+  // 雙箭頭 >> 代表加速
+  ctx.strokeStyle = '#ffd35a'; ctx.lineWidth = 3.5; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(p.x - 9, y - 7); ctx.lineTo(p.x - 2, y); ctx.lineTo(p.x - 9, y + 7);
+  ctx.moveTo(p.x + 1, y - 7); ctx.lineTo(p.x + 8, y); ctx.lineTo(p.x + 1, y + 7);
+  ctx.stroke();
+}
+
+// ---------- 無人機（三種機型） ----------
+function rotor(rx, ry, rw, spinning) {
+  if (spinning) {
+    ctx.fillStyle = 'rgba(225,238,248,.5)';
+    ctx.beginPath(); ctx.ellipse(rx, ry, rw, 3, 0, 0, Math.PI * 2); ctx.fill();
+    const a = Math.cos(t * 55 + rx);
+    ctx.strokeStyle = 'rgba(40,50,60,.8)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(rx - (rw - 1) * a, ry); ctx.lineTo(rx + (rw - 1) * a, ry); ctx.stroke();
+  } else {
+    ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(rx - rw + 2, ry); ctx.lineTo(rx + rw - 2, ry); ctx.stroke();
+  }
+}
+function statusLed(x, y, d) {
+  const blink = Math.sin(t * 10) > 0;
+  ctx.fillStyle = !d.powered ? '#444' : battery < 20 ? (blink ? '#ff4d3d' : '#5a1a14') : (blink ? '#6dff9c' : '#1f5a35');
+  ctx.beginPath(); ctx.arc(x, y, 2.3, 0, Math.PI * 2); ctx.fill();
+}
+
+// 一般無人機（第一階段）
+function drawStdBody(d, spin) {
+  ctx.strokeStyle = '#2b3440'; ctx.lineCap = 'round';
+  ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-28, -6); ctx.lineTo(28, -6); ctx.stroke();
+  ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-28, -6); ctx.lineTo(-28, -12); ctx.moveTo(28, -6); ctx.lineTo(28, -12); ctx.stroke();
+  rotor(-28, -13, 17, spin); rotor(28, -13, 17, spin);
+  ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-10, 5); ctx.lineTo(-14, 14); ctx.moveTo(10, 5); ctx.lineTo(14, 14);
+  ctx.moveTo(-19, 14); ctx.lineTo(-9, 14); ctx.moveTo(9, 14); ctx.lineTo(19, 14);
+  ctx.stroke();
+  const g = ctx.createLinearGradient(0, -10, 0, 7);
+  g.addColorStop(0, '#ffffff'); g.addColorStop(1, '#b6c4cf');
+  ctx.fillStyle = g; ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2;
+  rr(-17, -10, 34, 16, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ff9f3a'; ctx.fillRect(-14, -4, 28, 3);
+  ctx.fillStyle = '#1d2630'; ctx.beginPath(); ctx.arc(6, 9, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7fd3ff'; ctx.beginPath(); ctx.arc(8, 9, 1.8, 0, Math.PI * 2); ctx.fill();
+  statusLed(-12, -3, d);
+}
+
+// 植保機（第二階段）：六旋翼、藥箱、噴桿
+function drawFarmBody(d, spin) {
+  ctx.strokeStyle = '#2b3440'; ctx.lineCap = 'round';
+  ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-38, -8); ctx.lineTo(38, -8); ctx.stroke();
+  ctx.lineWidth = 3; ctx.beginPath();
+  ctx.moveTo(-38, -8); ctx.lineTo(-38, -14); ctx.moveTo(38, -8); ctx.lineTo(38, -14); ctx.moveTo(0, -12); ctx.lineTo(0, -22);
+  ctx.stroke();
+  rotor(0, -23, 14, spin); rotor(-38, -15, 15, spin); rotor(38, -15, 15, spin);
+  // 起落架
+  ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-16, 0); ctx.lineTo(-22, 24); ctx.moveTo(16, 0); ctx.lineTo(22, 24);
+  ctx.moveTo(-28, 24); ctx.lineTo(-16, 24); ctx.moveTo(16, 24); ctx.lineTo(28, 24);
+  ctx.stroke();
+  // 藥箱
+  ctx.fillStyle = 'rgba(232,244,248,.95)'; ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 1.5;
+  rr(-13, 1, 26, 15, 5); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#4fc3a1'; ctx.fillRect(-10, 8, 20, 6);
+  // 噴桿與噴頭
+  ctx.strokeStyle = '#3a4450'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(-34, 20); ctx.lineTo(34, 20); ctx.moveTo(0, 16); ctx.lineTo(0, 20); ctx.stroke();
+  ctx.fillStyle = '#ff9f3a';
+  for (const nx of [-30, -15, 0, 15, 30]) ctx.fillRect(nx - 2, 20, 4, 3);
+  // 機身
+  const g = ctx.createLinearGradient(0, -14, 0, 2);
+  g.addColorStop(0, '#f6f9f2'); g.addColorStop(1, '#c4d4ba');
+  ctx.fillStyle = g; ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2;
+  rr(-21, -14, 42, 15, 6); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#3aa35b'; ctx.fillRect(-18, -8, 36, 3);
+  statusLed(-15, -10, d);
+}
+
+// 空拍機（第三階段）：流線機身、雲台相機
+function drawAerialBody(d, spin) {
+  ctx.strokeStyle = '#2b3440'; ctx.lineCap = 'round';
+  ctx.lineWidth = 3.5; ctx.beginPath(); ctx.moveTo(-26, -6); ctx.lineTo(26, -6); ctx.stroke();
+  ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-26, -6); ctx.lineTo(-26, -11); ctx.moveTo(26, -6); ctx.lineTo(26, -11); ctx.stroke();
+  rotor(-26, -12, 16, spin); rotor(26, -12, 16, spin);
+  ctx.strokeStyle = '#2b3440'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-12, 3); ctx.lineTo(-16, 12); ctx.moveTo(-10, 3); ctx.lineTo(-6, 12); ctx.stroke();
+  const g = ctx.createLinearGradient(0, -11, 0, 4);
+  g.addColorStop(0, '#6a7682'); g.addColorStop(1, '#2f3740');
+  ctx.fillStyle = g; ctx.strokeStyle = '#1d2630'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-18, -2); ctx.quadraticCurveTo(-18, -11, -6, -11); ctx.lineTo(10, -11); ctx.quadraticCurveTo(20, -10, 20, -2); ctx.quadraticCurveTo(18, 4, 8, 4); ctx.lineTo(-12, 4); ctx.quadraticCurveTo(-18, 4, -18, -2); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ff9f3a'; ctx.fillRect(-12, -6, 22, 2.5);
+  // 雲台相機
+  ctx.fillStyle = '#3a4450'; ctx.fillRect(7, 3, 5, 4);
+  ctx.fillStyle = '#1d2630'; rr(3, 6, 17, 11, 3); ctx.fill();
+  ctx.fillStyle = '#7fd3ff'; ctx.beginPath(); ctx.arc(17, 11.5, 3.5, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#c9d3db'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(17, 11.5, 4.5, 0, Math.PI * 2); ctx.stroke();
+  statusLed(-12, -5, d);
+}
+
+function drawDrone(d) {
+  const spin = d.powered && state !== 'over';
+  ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.tilt + d.spin);
+  if (d.craft === 'farm') drawFarmBody(d, spin);
+  else if (d.craft === 'aerial') drawAerialBody(d, spin);
+  else drawStdBody(d, spin);
+  ctx.restore();
+  // 漏噴、撞到特殊物體：機體閃紅光
+  if (redFlash > 0 && Math.sin(t * 42) > 0) {
+    ctx.fillStyle = 'rgba(255,60,50,.45)';
+    ctx.beginPath(); ctx.ellipse(d.x, d.y, 48, 28, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // 換機時的白色光圈
+  if (craftFlash > 0) {
+    const k = 1 - craftFlash / .7;
+    ctx.strokeStyle = `rgba(255,255,255,${craftFlash / .7})`; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(d.x, d.y, 30 + k * 70, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+// ===== js/hud.js =====
+// 逆風無人機：HUD、橫幅、標題／暫停／結算畫面
+// 手機畫面小，HUD 放大 1.2 倍；各區塊以自己貼齊的角落為中心縮放
+const HUD_S = isTouch ? 1.2 : 1;
+function hudScale(ox) { ctx.save(); ctx.translate(ox, 0); ctx.scale(HUD_S, HUD_S); ctx.translate(-ox, 0); }
+function panel(x, y, w, h) { ctx.fillStyle = 'rgba(8,18,26,.62)'; rr(x, y, w, h, 10); ctx.fill(); }
+
+// canvas 上可以點的按鈕；登記到 uiButtons 讓 input.js 判斷點擊
+function uiButton(x, y, w, h, label, action, primaryStyle) {
+  uiButtons.push({ x, y, w, h, action });
+  ctx.fillStyle = primaryStyle ? '#ffa23f' : 'rgba(255,255,255,.12)';
+  rr(x, y, w, h, h / 2); ctx.fill();
+  if (!primaryStyle) { ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 1.5; rr(x, y, w, h, h / 2); ctx.stroke(); }
+  ctx.fillStyle = primaryStyle ? '#1a1206' : '#eef3ee';
+  ctx.font = `800 15px ${FT}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+  ctx.textBaseline = 'alphabetic';
+}
+// 兩顆並排的按鈕：主要動作＋回到選單
+function buttonPair(y, mainLabel, mainAction) {
+  const w = 190, h = 42, gap = 16, x0 = W / 2 - w - gap / 2;
+  uiButton(x0, y, w, h, mainLabel + (isTouch ? '' : '（空白鍵）'), mainAction, true);
+  uiButton(x0 + w + gap, y, w, h, '選擇模式' + (isTouch ? '' : '（T）'), goTitle, false);
+}
+
+function drawHUD() {
+  ctx.textBaseline = 'alphabetic';
+  // 左上：分數
+  const extra = stage.id === 1 ? 0 : 20;
+  hudScale(0);
+  panel(12, 12, 214, 78 + extra);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8fb0bf'; ctx.font = `700 12px ${FT}`; ctx.fillText('分數', 26, 32);
+  ctx.fillStyle = '#eef3ee'; ctx.font = `800 28px ${FN}`; ctx.fillText(String(totalScore()), 26, 62);
+  ctx.fillStyle = '#8fb0bf'; ctx.font = `600 12px ${FN}`;
+  ctx.fillText(Math.floor(flown()) + ' m　最高 ' + modeBest(), 26, 82);
+  if (stage.id === 2) {
+    ctx.font = `700 13px ${FT}`;
+    ctx.fillStyle = '#7fe0a0'; ctx.fillText('已噴 ' + sc.fields, 26, 102);
+    ctx.fillStyle = sc.missed ? '#ff8a7a' : '#8fb0bf'; ctx.fillText('漏噴 ' + sc.missed, 100, 102);
+  } else if (stage.id === 3) {
+    ctx.font = `700 13px ${FT}`;
+    ctx.fillStyle = '#eef3ee'; ctx.fillText('相片 ' + sc.photos, 26, 102);
+    ctx.fillStyle = '#ffd35a'; ctx.fillText('完美 ' + sc.perfect, 100, 102);
+  }
+  ctx.restore();
+
+  // 中上：階段與關卡
+  hudScale(W / 2);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(8,18,26,.62)'; rr(W / 2 - 80, 14, 160, 30, 15); ctx.fill();
+  ctx.fillStyle = '#ffa23f'; ctx.font = `800 15px ${FT}`; ctx.fillText((mode.lock ? mode.name : stage.short) + ' · LV ' + level + (level <= STAGE_LEVELS ? '/' + STAGE_LEVELS : ''), W / 2, 35);
+  ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(W / 2 - 60, 48, 120, 3);
+  ctx.fillStyle = '#ffa23f'; ctx.fillRect(W / 2 - 60, 48, 120 * ((dist % LEVEL_M) / LEVEL_M), 3);
+  // booster timer
+  if (boost > 0) {
+    ctx.fillStyle = 'rgba(8,18,26,.62)'; rr(W / 2 - 70, 56, 140, 24, 12); ctx.fill();
+    ctx.fillStyle = '#ffa23f'; rr(W / 2 - 66, 60, 132 * (boost / BOOST_TIME), 16, 8); ctx.fill();
+    ctx.fillStyle = '#1a1206'; ctx.font = `900 12px ${FT}`;
+    ctx.fillText('加速中 ' + boost.toFixed(1) + 's', W / 2, 73);
+  }
+  ctx.restore();
+
+  // 右上：電量與風向
+  hudScale(W);
+  const px = W - 232;
+  panel(px, 12, 220, 78);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8fb0bf'; ctx.font = `700 12px ${FT}`; ctx.fillText('電量', px + 14, 32);
+  const bx = px + 52, by = 20, bw = 140, bh = 20;
+  ctx.strokeStyle = penalty.t > 0 ? '#ff5a4e' : '#dfe8ea'; ctx.lineWidth = 2; rr(bx, by, bw, bh, 4); ctx.stroke();
+  ctx.fillStyle = '#dfe8ea'; ctx.fillRect(bx + bw + 2, by + 6, 4, 8);
+  const low = battery < 20, blink = Math.sin(t * 12) > 0;
+  ctx.fillStyle = battery > 50 ? '#7fe0a0' : battery > 20 ? '#ffc04a' : (blink ? '#ff5a4e' : '#8a2a22');
+  if (battery > 0) { rr(bx + 3, by + 3, (bw - 6) * battery / 100, bh - 6, 2); ctx.fill(); }
+  ctx.fillStyle = '#eef3ee'; ctx.font = `800 13px ${FN}`; ctx.textAlign = 'center';
+  ctx.fillText(Math.ceil(battery) + '%', bx + bw / 2, by + 15);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8fb0bf'; ctx.font = `700 12px ${FT}`; ctx.fillText('風向', px + 14, 72);
+  const mag = Math.hypot(wind.x, wind.y);
+  if (level < 3 && mag < 5) {
+    ctx.fillStyle = '#eef3ee'; ctx.font = `600 13px ${FT}`; ctx.fillText('平靜', px + 52, 72);
+  } else {
+    ctx.save(); ctx.translate(px + 70, 67); ctx.rotate(Math.atan2(wind.y, wind.x));
+    const L = clamp(mag / 20, 6, 18);
+    ctx.strokeStyle = mag > 300 ? '#ff7a5c' : '#eef3ee'; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(-L, 0); ctx.lineTo(L - 4, 0); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(L + 3, 0); ctx.lineTo(L - 6, -6); ctx.lineTo(L - 6, 6); ctx.closePath(); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#eef3ee'; ctx.font = `700 13px ${FN}`;
+    ctx.fillText((mag / 40).toFixed(1) + ' m/s', px + 98, 72);
+  }
+  ctx.restore();
+
+  // 中間的提示訊息（由上往下排）
+  ctx.textAlign = 'center';
+  let wy = 82 * HUD_S;
+  const line = (text, color, size, gap) => { wy += gap; ctx.fillStyle = color; ctx.font = `900 ${size}px ${FT}`; ctx.fillText(text, W / 2, wy); };
+  if (state !== 'play') return;
+  if (zoneToast > 0 && zone) line('進入活動場地：' + zone.name, `rgba(255,255,255,${Math.min(1, zoneToast)})`, 16, 22);
+  if (windWarn) line('風向即將改變', `rgba(255,162,63,${.6 + .4 * Math.sin(t * 14)})`, 16, 22);
+  if (penalty.t > 0) line('漏噴懲罰：耗電 ×' + penaltyMul().toFixed(1) + '（' + Math.ceil(penalty.t) + ' 秒）', blink ? '#ff5a4e' : 'rgba(255,90,78,.5)', 16, 22);
+  if (spraying && !sprayEffective) line('飛太高了，噴霧落不到地面', '#ffd35a', 16, 22);
+  if (low && drone.powered) line('低電量！快去收集電池', blink ? '#ff5a4e' : 'rgba(255,90,78,.35)', 18, 24);
+  if (!drone.powered) line('失去動力！接住電池可重新啟動', '#ff5a4e', 22, 28);
+}
+
+function drawBanner() {
+  if (!banner) return;
+  const a = Math.min(1, banner.t / .4, (banner.max - banner.t) / .3);
+  ctx.globalAlpha = clamp(a, 0, 1);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(8,18,26,.6)'; rr(W / 2 - 250, 168, 500, 86, 12); ctx.fill();
+  ctx.fillStyle = '#ffa23f'; ctx.font = `900 30px ${FT}`; ctx.fillText(banner.title, W / 2, 207);
+  ctx.fillStyle = '#eef3ee'; ctx.font = `700 17px ${FT}`; ctx.fillText(banner.sub, W / 2, 238);
+  ctx.globalAlpha = 1;
+}
+
+function dim() { ctx.fillStyle = 'rgba(8,16,24,.6)'; ctx.fillRect(0, 0, W, H); }
+
+function drawTitle() {
+  dim();
+  const cx = W / 2;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffa23f'; ctx.font = `700 14px ${FN}`; ctx.fillText('SIDE-SCROLL DRONE RUN', cx, 74);
+  ctx.fillStyle = '#eef3ee'; ctx.font = `900 54px ${FT}`; ctx.fillText('逆風無人機', cx, 132);
+  ctx.font = `500 15px ${FT}`; ctx.fillStyle = '#c9dbe2';
+  ctx.fillText(!isTouch ? '方向鍵飛行，空白鍵是動作鍵（植保噴灑、空拍拍照）'
+    : settings.mode === 'joy' ? '拖曳搖桿飛行，右下角的動作鈕用來噴灑、拍照' : '用方向按鈕飛行，動作鈕用來噴灑、拍照', cx, 168);
+  ctx.fillText('分數 ＝ 飛行距離 ＋ 噴灑農田 ＋ 空拍照片', cx, 192);
+
+  // 模式卡片
+  const cw = 196, ch = 124, gap = 16, y = 214;
+  const x0 = cx - (MODES.length * cw + (MODES.length - 1) * gap) / 2;
+  MODES.forEach((m, i) => {
+    const x = x0 + i * (cw + gap), sel = i === menuSel;
+    uiButtons.push({ x, y, w: cw, h: ch, action: () => { menuSel = i; primary(); }, hover: () => { menuSel = i; } });
+    ctx.fillStyle = sel ? 'rgba(255,162,63,.18)' : 'rgba(8,18,26,.55)';
+    rr(x, y, cw, ch, 12); ctx.fill();
+    ctx.strokeStyle = sel ? '#ffa23f' : 'rgba(255,255,255,.22)'; ctx.lineWidth = sel ? 3 : 1.5;
+    rr(x, y, cw, ch, 12); ctx.stroke();
+    if (!isTouch) {
+      ctx.fillStyle = sel ? '#ffa23f' : 'rgba(255,255,255,.25)';
+      ctx.beginPath(); ctx.arc(x + 20, y + 20, 11, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = sel ? '#1a1206' : '#eef3ee'; ctx.font = `800 13px ${FN}`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(String(i + 1), x + 20, y + 21);
+      ctx.textBaseline = 'alphabetic';
+    }
+    ctx.textAlign = 'center';
+    ctx.fillStyle = sel ? '#ffa23f' : '#eef3ee'; ctx.font = `900 22px ${FT}`; ctx.fillText(m.name, x + cw / 2, y + 44);
+    ctx.fillStyle = '#c9dbe2'; ctx.font = `600 13px ${FT}`; ctx.fillText(m.sub, x + cw / 2, y + 68);
+    ctx.fillStyle = '#8fb0bf'; ctx.font = `600 13px ${FT}`; ctx.fillText(m.tip, x + cw / 2, y + 89);
+    ctx.fillStyle = modeBest(m) ? '#eef3ee' : '#8fb0bf'; ctx.font = `700 13px ${FT}`;
+    ctx.fillText(modeBest(m) ? '最高分 ' + modeBest(m) : '還沒有紀錄', x + cw / 2, y + 112);
+  });
+
+  const pulse = .6 + .4 * Math.sin(t * 4);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = `rgba(255,162,63,${pulse})`; ctx.font = `900 18px ${FT}`;
+  ctx.fillText(isTouch ? '點選模式開始飛行' : '← → 選擇模式，按 空白鍵 開始（也可以直接按 1、2、3）', cx, 378);
+  if (bestDist > 0) {
+    ctx.fillStyle = '#8fb0bf'; ctx.font = `700 13px ${FT}`;
+    ctx.fillText('完整挑戰最遠紀錄 ' + bestDist + ' m', cx, 404);
+  }
+}
+
+function drawOver() {
+  dim();
+  const o = overInfo;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff5a4e'; ctx.font = `900 40px ${FT}`; ctx.fillText('墜機', W / 2, 74);
+  ctx.fillStyle = '#eef3ee'; ctx.font = `700 17px ${FT}`;
+  ctx.fillText(o.reason + '　·　' + mode.name + '　·　到達' + STAGES[o.stageId - 1].short + ' LV ' + o.level, W / 2, 104);
+  ctx.fillStyle = '#8fb0bf'; ctx.font = `700 13px ${FT}`; ctx.fillText('總分', W / 2, 134);
+  ctx.fillStyle = '#eef3ee'; ctx.font = `800 46px ${FN}`; ctx.fillText(String(o.score), W / 2, 178);
+  ctx.font = `800 14px ${FT}`; ctx.fillStyle = newRecord ? '#ffa23f' : '#8fb0bf';
+  ctx.fillText(newRecord ? mode.name + '新紀錄！' : mode.name + '最高分 ' + modeBest(), W / 2, 202);
+
+  // 分數明細：練習模式只列該階段相關的項目
+  const fieldPts = sc.fields * SCORE.field, photoPts = sc.task - fieldPts;
+  const rows = [['飛行距離', o.dist + ' m', o.dist, true]];
+  if (mode.id !== 'aerial') rows.push(['農田噴灑', sc.fields + ' 塊（漏噴 ' + sc.missed + '）', fieldPts, o.stageId >= 2]);
+  if (mode.id !== 'farm') rows.push(['空拍照片', sc.photos + ' 張（完美構圖 ' + sc.perfect + '）', photoPts, o.stageId >= 3]);
+  const lx = W / 2 - 190, rx = W / 2 + 190;
+  ctx.strokeStyle = 'rgba(255,255,255,.15)'; ctx.lineWidth = 1;
+  rows.forEach(([name, detail, pts, reached], i) => {
+    const y = 236 + i * 28;
+    ctx.globalAlpha = reached ? 1 : .45;
+    ctx.textAlign = 'left'; ctx.fillStyle = '#c9dbe2'; ctx.font = `700 15px ${FT}`; ctx.fillText(name, lx, y);
+    ctx.fillStyle = '#8fb0bf'; ctx.font = `600 14px ${FT}`; ctx.fillText(reached ? detail : '未到達', lx + 84, y);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#eef3ee'; ctx.font = `800 15px ${FN}`; ctx.fillText(reached ? '+' + pts : '—', rx, y);
+    ctx.beginPath(); ctx.moveTo(lx, y + 9); ctx.lineTo(rx, y + 9); ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+  let y = 236 + (rows.length - 1) * 28 + 9;
+
+  // 本次空拍作品
+  if (o.stageId >= 3) {
+    ctx.textAlign = 'center'; ctx.fillStyle = '#8fb0bf'; ctx.font = `700 13px ${FT}`;
+    ctx.fillText(album.length ? '本次空拍作品（共 ' + album.length + ' 張）' : '這次沒有拍到空拍作品', W / 2, y + 26);
+    if (album.length) {
+      const shown = album.slice(-6), cw = 50, ch = 60, gap = 12;
+      const x0 = W / 2 - (shown.length * cw + (shown.length - 1) * gap) / 2;
+      shown.forEach((p, i) => drawPolaroid(x0 + i * (cw + gap), y + 38, cw, ch, p.kind, p.perfect));
+      y += 100;
+    } else y += 30;
+  }
+  if (overDelay <= 0) buttonPair(Math.min(y + 22, H - 54), '重新開始', primary);
+}
+
+function drawPause() {
+  dim();
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#eef3ee'; ctx.font = `900 48px ${FT}`; ctx.fillText('暫停', W / 2, 220);
+  ctx.fillStyle = '#c9dbe2'; ctx.font = `600 16px ${FT}`;
+  ctx.fillText(mode.name + '　·　' + (isTouch ? '點一下畫面繼續' : '按 P 或點擊畫面繼續'), W / 2, 258);
+  buttonPair(290, '繼續', togglePause);
+}
+
+// ===== js/core.js =====
+// 逆風無人機：遊戲狀態、階段切換、物理、碰撞、計分與主迴圈
+let state = 'title';
+let t = 0, bgX = 0, skyF = 0, shake = 0;
+let drone = { x: 220, y: H * .45, vx: 0, vy: 0, tilt: 0, spin: 0, powered: true, craft: 'std' };
+let obstacles = [], pickups = [], particles = [], streaks = [], floaters = [];
+let dist = 0, level = 1, speed = 230, battery = 100;
+let wind = { x: 0, y: 0 }, windTarget = { x: 0, y: 0 }, windTimer = 0, windWarn = false;
+let spawnT = 0, batT = 0, lastType = '', banner = null, overInfo = null, overDelay = 0, overSpeed = 0, lowBeep = 0, newRecord = false;
+// 加速器（第 3 關起出現）
+const BOOST_MUL = 1.6, BOOST_TIME = 4, BOOST_GRACE = 1.2;
+let boost = 0, grace = 0, boostMul = 1, boostSpawnT = 6;
+// 階段
+let stage = STAGES[0], prevStage = null, stageBlend = 1, transitionT = 0;
+let craftFlash = 0, redFlash = 0, hurtT = 0;
+
+// 模式：menuSel 是標題畫面選中的模式，mode 是正在玩的模式
+let menuSel = START_MODE, mode = MODES[START_MODE];
+// 操控手感：推力大、阻力也大 → 起步和煞車都更快（v0.6 比 v0.5 推力 +25%、阻力 3.2→3.7）
+const THRUST_UP = 1580, THRUST_DOWN = 895, THRUST_SIDE = 1305, DRAG = 3.7;
+const WIND_K = DRAG / 3.2;   // 阻力變大後，風力等比例加大，讓被風吹的程度跟以前一樣
+const TILT_RATE = 12;
+// 吃道具（電池、加速器）的判定半徑：v0.7 從 34 加大到 44；機身大小和撞障礙物的判定不變
+const PICKUP_R = 44;
+
+// ---------- 計分 ----------
+let sc = newScore(), distStart = 0;
+function newScore() { return { fields: 0, missed: 0, photos: 0, perfect: 0, task: 0 }; }
+// 飛行距離只算這一局實際飛的（練習模式從 900 m／1800 m 起飛，不送起點的距離）
+function flown() { return Math.max(0, dist - distStart); }
+function totalScore() { return Math.floor(flown()) + sc.task; }
+function addScore(pts, x, y, text, color) {
+  sc.task += pts;
+  floaters.push({ x, y, text, color, life: 1.1 });
+}
+const bests = {};
+let bestDist = 0;
+try {
+  for (const m of MODES) bests[m.id] = Number(localStorage.getItem(m.key)) || 0;
+  bestDist = Number(localStorage.getItem('drone-best')) || 0;
+} catch (e) { for (const m of MODES) bests[m.id] = bests[m.id] || 0; }
+const modeBest = (m = mode) => bests[m.id] || 0;
+function saveBest() {
+  try {
+    localStorage.setItem(mode.key, String(bests[mode.id]));
+    localStorage.setItem('drone-best', String(bestDist));
+  } catch (e) {}
+}
+
+function showBanner(title, sub, dur = 2.6) { banner = { title, sub, t: dur, max: dur }; }
+
+function stageSub(st) {
+  if (st.id === 2) return isTouch ? '按住動作鈕對農田噴灑，漏噴會加快耗電' : '按住 空白鍵 對農田噴灑，漏噴會加快耗電';
+  if (st.id === 3) return isTouch ? '按動作鈕拍下取景框內的特殊物體' : '按 空白鍵 拍下取景框內的特殊物體';
+  return !isTouch ? '按 ↑ 保持高度，收集電池'
+    : settings.mode === 'joy' ? '搖桿往上推保持高度，收集電池' : '按 ▲ 保持高度，收集電池';
+}
+function initStageExtras(st) {
+  if (st.id === 2) { farmHints = 2; fieldT = 1.2; }
+  if (st.id === 3) { aerialHints = 2; specialT = 1.5; decorT = 0; zone = zoneFor(dist); zoneToast = 2.5; }
+}
+
+function startGame(m = mode) {
+  mode = m;
+  const st = STAGES[m.start - 1];
+  stage = st; prevStage = null; stageBlend = 1;
+  dist = st.from; distStart = st.from; level = 1;
+  speed = Math.min(470, 230 + (level - 1) * 28);
+  drone = { x: 180, y: H * 0.42, vx: 0, vy: 0, tilt: 0, spin: 0, powered: true, craft: st.craft };
+  obstacles = []; pickups = []; particles = []; floaters = [];
+  battery = 100;
+  wind = { x: 0, y: 0 }; windTarget = { x: 0, y: 0 }; windTimer = 3; windWarn = false;
+  spawnT = 1.2; batT = 4.5; lastType = ''; newRecord = false; lowBeep = 0;
+  boost = 0; grace = 0; boostMul = 1; boostSpawnT = 6;
+  craftFlash = 0; redFlash = 0; hurtT = 0;
+  sc = newScore();
+  resetFarm(); resetAerial();
+  initStageExtras(st);
+  transitionT = st.id === 1 ? 0 : 1;
+  state = 'play';
+  pauseBtn.textContent = '暫停';
+  if (st.id === 1) showBanner('LEVEL 1', stageSub(st));
+  else showBanner((m.lock ? m.name + '：' + st.short : st.title) + ' · LV 1', stageSub(st), 3.2);
+  tone(520, .12, 'square', .06); tone(780, .16, 'square', .06, 0, .1);
+}
+
+// 回到標題畫面（選擇模式）
+function goTitle() {
+  state = 'title';
+  motorSet(100, 0); hissSet(false); releaseAll();
+  obstacles = []; pickups = []; particles = []; floaters = []; banner = null;
+  resetFarm(); resetAerial();
+  wind = { x: 0, y: 0 }; windTarget = { x: 0, y: 0 }; windWarn = false;
+  boost = 0; grace = 0; boostMul = 1; hurtT = 0; redFlash = 0; craftFlash = 0;
+  drone.powered = true; drone.spin = 0; drone.vx = drone.vy = 0;
+  pauseBtn.textContent = '暫停';
+}
+
+// 飛到 1500 m、3000 m：換機、換場景，關卡回到 LV 1（障礙物、風力、速度一起重置）
+function enterStage(st) {
+  prevStage = stage; stage = st; stageBlend = 0; transitionT = 2.5;
+  level = 1;
+  drone.craft = st.craft; craftFlash = .7;
+  showBanner(st.title + ' · LV 1', stageSub(st), 3.2);
+  // 風向回到無風，下一陣風等到第 3 關才會出現
+  windTarget = { x: 0, y: 0 }; windTimer = 3; windWarn = false;
+  spawnT = Math.max(spawnT, 1.2); boostSpawnT = 6;
+  if (battery < 60) {
+    battery = 60; drone.powered = true; drone.spin = 0;
+    floaters.push({ x: drone.x, y: drone.y - 44, text: '換機補電 60%', color: '#7fe0a0', life: 1.6 });
+  }
+  for (const f of fields) if (f.state === 'todo') f.state = 'skip';
+  batT = Math.min(batT, 1.5);
+  initStageExtras(st);
+  [523, 659, 784, 1046].forEach((f, i) => tone(f, .16, 'triangle', .08, 0, i * .1));
+}
+
+function levelUp() {
+  const finalLv = !mode.lock && stage.id < STAGES.length && level === STAGE_LEVELS;
+  const msgs = {
+    1: { 2: '鳥群出沒', 3: '起風了！管道區出現，加速器登場', 4: '鳥群變多了' },
+    2: { 2: '農舍變高了，低空噴灑小心電線', 3: '起風了！加速器登場', 4: '風勢增強，別漏掉農田' },
+    3: { 2: '活動越來越熱鬧，多拍幾張吧', 3: '起風了！管道區出現，加速器登場', 4: '鳥群也來湊熱鬧了' },
+  };
+  let msg = msgs[stage.id][level] || '風勢更強了，撐住！';
+  if (finalLv) msg = stage.id === 1 ? '最後一關！撐過去就換植保機' : '最後一關！撐過去就換空拍機';
+  showBanner('LEVEL ' + level + (level > STAGE_LEVELS ? '' : ' / ' + STAGE_LEVELS), msg);
+  [523, 659, 784].forEach((f, i) => tone(f, .14, 'triangle', .08, 0, i * .09));
+}
+
+function skyTarget() {
+  if (stage.id === 1) return clamp((level - 1) / 5, 0, .45);
+  if (stage.id === 2) return clamp(.1 + (level - 1) * .08, 0, .45);
+  return clamp(.15 + (level - 1) * .1, 0, .7);
+}
+
+function crash(reason) {
+  state = 'over';
+  const total = totalScore();
+  overInfo = { reason, dist: Math.floor(flown()), score: total, stageId: stage.id, level };
+  overDelay = .9; overSpeed = speed; boost = 0; grace = 0;
+  actionUp(); hissSet(false);
+  newRecord = total > modeBest();
+  if (newRecord) bests[mode.id] = total;
+  if (mode.id === 'full') bestDist = Math.max(bestDist, Math.floor(flown()));
+  saveBest();
+  shake = reduceMotion ? 0 : 14;
+  motorSet(100, 0);
+  boom();
+  for (let i = 0; i < 46; i++) {
+    const a = rand(0, Math.PI * 2), v = rand(60, 380);
+    particles.push({ x: drone.x, y: drone.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 80, life: rand(.5, 1.3), max: 1.3,
+      size: rand(2, 6), color: pick(['#ffb454', '#ff6a3d', '#ffe08a', '#c9d3db', '#39424d']), grav: 500 });
+  }
+}
+
+// ---------- update ----------
+function update(dt) {
+  t += dt;
+  if (state === 'pause') return;
+
+  boostMul += ((boost > 0 ? BOOST_MUL : 1) - boostMul) * Math.min(1, dt * 4);
+  let worldSpeed = 140;
+  if (state === 'play') worldSpeed = speed * boostMul;
+  if (state === 'over') { overSpeed = Math.max(0, overSpeed - 420 * dt); worldSpeed = overSpeed; overDelay -= dt; }
+  bgX += worldSpeed * dt;
+  skyF += (skyTarget() - skyF) * Math.min(1, dt * .6);
+  shake = Math.max(0, shake - 30 * dt);
+  stageBlend = Math.min(1, stageBlend + dt / 1.5);
+  transitionT = Math.max(0, transitionT - dt);
+  craftFlash = Math.max(0, craftFlash - dt);
+  redFlash = Math.max(0, redFlash - dt);
+  hurtT = Math.max(0, hurtT - dt);
+
+  if (state === 'title') {
+    // 標題畫面的背景與機型跟著選中的模式切換
+    const want = STAGES[MODES[menuSel].start - 1];
+    if (want !== stage) { prevStage = stage; stage = want; stageBlend = 0; craftFlash = .7; }
+    level = 1;
+    drone.craft = want.craft;
+    drone.x = 120; drone.y = 112 + Math.sin(t * 2) * 8; drone.tilt = Math.sin(t * 1.3) * .05;
+  }
+
+  if (state === 'play') {
+    dist += worldSpeed * dt * M_PER_PX;
+    const st = stageFor(dist);
+    if (!mode.lock && st.id > stage.id) enterStage(st);
+    else {
+      const lv = levelFor(dist, stage);
+      if (lv > level) { level = lv; levelUp(); }
+    }
+    speed += (Math.min(470, 230 + (level - 1) * 28) - speed) * Math.min(1, dt * .8);
+
+    // --- drone physics ---
+    const d = drone;
+    const inp = readInput();
+    const up = Math.max(0, -inp.y), down = Math.max(0, inp.y);
+    const TH = stage.thrust;
+    let ax = 0, ay, drag;
+    if (d.powered) {
+      const eff = battery < 15 ? .5 + .5 * battery / 15 : 1;
+      ay = 380 - 260 * eff;           // hover assist fades as the battery dies
+      ay -= THRUST_UP * eff * up * TH;     // 搖桿推越多推力越大；鍵盤固定 1
+      ay += THRUST_DOWN * down * TH;
+      ax += THRUST_SIDE * eff * inp.x * TH;
+      drag = DRAG;
+    } else {
+      ay = 900; drag = .5;
+      d.spin += dt * 4;
+    }
+    ax += wind.x * WIND_FACTOR * WIND_K; ay += wind.y * WIND_FACTOR * WIND_K * (d.powered ? 1 : .3);
+    d.vx += ax * dt; d.vy += ay * dt;
+    d.vx -= d.vx * drag * dt; d.vy -= d.vy * drag * dt;
+    d.x += d.vx * dt; d.y += d.vy * dt;
+    if (d.x < 40) { d.x = 40; d.vx = Math.max(0, d.vx); }
+    if (d.x > W * .72) { d.x = W * .72; d.vx = Math.min(0, d.vx); }
+    if (d.y < 24) { d.y = 24; d.vy = Math.max(0, d.vy); }
+    d.tilt += (clamp(d.vx / 420 + (boost > 0 ? .12 : 0), -.4, .45) - d.tilt) * Math.min(1, dt * TILT_RATE);
+
+    // --- battery ---
+    if (d.powered) {
+      // 植保機載藥：基本耗電 ×1.3；漏噴懲罰期間整體耗電再乘上倍數
+      const base = (1.2 + level * .22) * stage.drain;
+      const drain = (base + 1.4 * up + .5 * Math.min(1, Math.abs(inp.x))) * penaltyMul();
+      battery = Math.max(0, battery - drain * dt);
+      if (battery <= 0) {
+        d.powered = false;
+        floaters.push({ x: d.x, y: d.y - 30, text: '電量耗盡！', color: '#ff5a4e', life: 1.6 });
+        tone(440, .6, 'sawtooth', .08, -360);
+      }
+      if (battery < 20) {
+        lowBeep -= dt;
+        if (lowBeep <= 0) { tone(880, .08, 'square', .05); lowBeep = battery < 10 ? .45 : .9; }
+      }
+      motorSet(110 + 40 * up + (boost > 0 ? 70 : 0), .028);
+      // rotor wash
+      if (up > .3 && Math.random() < .7 * up) {
+        particles.push({ x: d.x + rand(-28, 28), y: d.y + 10, vx: -speed * .4 + rand(-20, 20), vy: rand(120, 200), life: .35, max: .35,
+          size: rand(1.5, 3), color: 'rgba(235,245,255,.7)', grav: 0 });
+      }
+    } else {
+      motorSet(60, 0);
+    }
+
+    // --- wind ---
+    if (level >= 3) {
+      windTimer -= dt;
+      if (windTimer < 1.3 && !windWarn) { windWarn = true; tone(330, .18, 'triangle', .06); tone(330, .18, 'triangle', .06, 0, .25); }
+      if (windTimer <= 0) {
+        const str = Math.min(560, 150 + (level - 3) * 90);
+        if (Math.random() < .18) windTarget = { x: 0, y: 0 };
+        else {
+          const a = rand(0, Math.PI * 2);
+          windTarget = { x: Math.cos(a) * str, y: Math.sin(a) * str * .75 };
+        }
+        windTimer = rand(3.5, 6.5); windWarn = false;
+      }
+    }
+    wind.x += (windTarget.x - wind.x) * Math.min(1, dt * 1.4);
+    wind.y += (windTarget.y - wind.y) * Math.min(1, dt * 1.4);
+
+    // --- spawn（換機過場期間暫停生成障礙物）---
+    if (transitionT <= 0) {
+      spawnT -= dt;
+      if (spawnT <= 0) { spawnObstacle(); spawnT = (Math.max(.8, 1.75 - level * .1) + rand(0, .5)) * stage.obsMul; }
+    }
+    batT -= dt;
+    if (batT <= 0) batT = spawnBattery() ? (Math.min(10.5, 6.3 + level * .45) + rand(0, 1.8)) * stage.batMul : .4;
+    if (level >= 3 && transitionT <= 0) {
+      boostSpawnT -= dt;
+      if (boostSpawnT <= 0) boostSpawnT = spawnBooster() ? rand(stage.boostGap[0], stage.boostGap[1]) : .5;
+    }
+
+    // --- booster ---
+    if (boost > 0) {
+      boost -= dt;
+      for (let i = 0; i < 3; i++) {
+        particles.push({ x: d.x - 20 + rand(-4, 4), y: d.y + rand(-6, 4), vx: -worldSpeed * .8 + rand(-60, 0), vy: rand(-30, 30),
+          life: rand(.2, .4), max: .4, size: rand(3, 6), color: pick(['#ffa23f', '#ffd35a', '#ff6a3d']), grav: 0 });
+      }
+      if (boost <= 0) { boost = 0; grace = BOOST_GRACE; tone(700, .3, 'sawtooth', .05, -400); }
+    } else if (grace > 0) grace = Math.max(0, grace - dt);
+  }
+
+  // --- world objects ---
+  for (const o of obstacles) {
+    if (o.type === 'bird') { o.x -= (worldSpeed + (state === 'over' ? o.extra * .5 : o.extra)) * dt; o.y = o.y0 + Math.sin(t * o.freq + o.phase) * o.amp; }
+    else if (o.type === 'cloud') {
+      o.x -= (worldSpeed + o.extra) * dt;
+      o.flash = Math.max(0, o.flash - dt);
+      if (Math.random() < dt * .35) o.flash = .14;
+    }
+    else o.x -= worldSpeed * dt;
+  }
+  obstacles = obstacles.filter(o => o.x + objW(o) > -200);
+  for (const p of pickups) p.x -= worldSpeed * dt;
+  pickups = pickups.filter(p => p.x > -40);
+  updateFarm(dt, worldSpeed);
+  updateAerial(dt, worldSpeed);
+
+  // --- collisions ---
+  if (state === 'play') {
+    const d = drone, HITS = CRAFT_HITS[d.craft];
+    outer:
+    for (const o of obstacles) {
+      if (o.x > d.x + 200 || o.x + objW(o) < d.x - 200) continue;
+      for (const [hx, hy, hr] of HITS) {
+        if (!hitObs(o, d.x + hx, d.y + hy, hr * HIT_FACTOR)) continue;
+        if (boost > 0) { smash(o); break; }        // 加速中：直接撞碎障礙物
+        if (grace > 0 || hurtT > 0) break;         // 短暫無敵
+        crash(REASON[o.type]); break outer;
+      }
+    }
+    obstacles = obstacles.filter(o => !o.dead);
+    // 特殊物體：撞到扣電量、不墜機；加速中直接穿過
+    if (state === 'play' && boost <= 0 && grace <= 0 && hurtT <= 0) {
+      for (const o of specials) {
+        if (HITS.some(([hx, hy, hr]) => hitSpecial(o, d.x + hx, d.y + hy, hr * HIT_FACTOR))) { hitSpecialObject(o); break; }
+      }
+      specials = specials.filter(o => !o.dead);
+    }
+    if (state === 'play' && d.y + CRAFT_BOTTOM[d.craft] >= H - GROUND) crash(d.powered ? '機體觸地' : '電量耗盡墜毀');
+    if (state === 'play') {
+      for (const p of pickups) {
+        if (d2(p.x, p.y, d.x, d.y) < PICKUP_R * PICKUP_R) {
+          p.dead = true;
+          if (p.kind === 'boost') {
+            boost = BOOST_TIME; grace = 0;
+            floaters.push({ x: p.x, y: p.y - 20, text: '加速器啟動！', color: '#ffa23f', life: 1.2 });
+            tone(300, .5, 'sawtooth', .07, 700);
+            shake = reduceMotion ? 0 : 4;
+            continue;
+          }
+          const revived = !d.powered;
+          battery = Math.min(100, battery + 25);
+          d.powered = true; d.spin = 0;
+          floaters.push({ x: p.x, y: p.y - 20, text: revived ? '重新啟動！+25%' : '+25% 電量', color: '#7fe0a0', life: 1.2 });
+          tone(660, .1, 'triangle', .1); tone(990, .16, 'triangle', .1, 0, .08);
+          for (let i = 0; i < 14; i++) {
+            const a = rand(0, Math.PI * 2);
+            particles.push({ x: p.x, y: p.y, vx: Math.cos(a) * 160, vy: Math.sin(a) * 160, life: .45, max: .45, size: 2.5, color: '#9dffbf', grav: 0 });
+          }
+        }
+      }
+      pickups = pickups.filter(p => !p.dead);
+    }
+  }
+
+  // --- particles / streaks / floaters ---
+  for (const p of particles) { p.vy += p.grav * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; }
+  particles = particles.filter(p => p.life > 0);
+
+  const wmag = Math.hypot(wind.x, wind.y);
+  if (wmag > 40 && Math.random() < dt * wmag / 18) {
+    streaks.push({ x: wind.x < 0 ? W + 20 : rand(-20, W), y: rand(20, H - GROUND - 10), life: rand(.6, 1.1) });
+  }
+  for (const s of streaks) {
+    s.x += (-worldSpeed * .6 + wind.x * 1.6) * dt; s.y += wind.y * 1.2 * dt; s.life -= dt;
+  }
+  streaks = streaks.filter(s => s.life > 0);
+
+  for (const f of floaters) { f.y -= 40 * dt; f.life -= dt; }
+  floaters = floaters.filter(f => f.life > 0);
+  if (banner) { banner.t -= dt; if (banner.t <= 0) banner = null; }
+}
+
+// ---------- draw ----------
+function draw() {
+  uiButtons = [];   // 畫面上可以點的按鈕，每一幀由 hud.js 重新登記
+  ctx.save();
+  if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+  drawBackground();
+  for (const dc of decor) drawDecor(dc);
+  for (const o of obstacles) if (o.type === 'cloud') drawCloud(o);
+  for (const o of obstacles) if (o.type !== 'cloud') drawObstacle(o);
+  drawGround();
+  drawFields();
+  drawSprayGuide();
+  for (const o of specials) drawSpecial(o);
+  for (const p of pickups) p.kind === 'boost' ? drawBooster(p) : drawBattery(p);
+  for (const p of particles) {
+    ctx.globalAlpha = clamp(p.life / p.max, 0, 1);
+    ctx.fillStyle = p.color; ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+  if (state !== 'over') {
+    // 無敵時間（加速結束、撞到特殊物體後）：機身閃爍
+    if ((grace > 0 || hurtT > 0) && Math.sin(t * 40) > 0) ctx.globalAlpha = .35;
+    if (boost > 0) {
+      ctx.fillStyle = `rgba(255,162,63,${.22 + .1 * Math.sin(t * 30)})`;
+      ctx.beginPath(); ctx.ellipse(drone.x, drone.y - 2, 46, 24, 0, 0, Math.PI * 2); ctx.fill();
+    }
+    drawDrone(drone);
+    ctx.globalAlpha = 1;
+  }
+  drawViewfinder();
+  ctx.textAlign = 'center';
+  for (const f of floaters) {
+    ctx.globalAlpha = clamp(f.life, 0, 1);
+    ctx.fillStyle = f.color; ctx.font = `900 18px ${FT}`; ctx.fillText(f.text, f.x, f.y);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+  drawFlash();
+
+  if (state === 'title') drawTitle();
+  else {
+    if (state !== 'over') drawHUD();   // 結算畫面已經列出所有分數
+    drawCards();
+    if (state === 'play') drawBanner();
+    if (state === 'pause') drawPause();
+    if (state === 'over') drawOver();
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.033, (now - last) / 1000);
+  last = now;
+  syncTouchUI();
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+})();
+</script>
